@@ -1,7 +1,7 @@
 /*  leon070.cpp:   using the X11 clipboard
     select, cut and paste text - using the clipboard
     [mouse drag] select     [C] cut     [P] paste or [middlemouse btn]
-    g++ leon.cpp -o leon -lX11 -lXft -lfontconfig -I/usr/include/freetype2
+    g++ leon070.cpp -o leon -lX11 -lXft -lfontconfig -I/usr/include/freetype2
                                                           [250707]  */
 
 #include <X11/Xlib.h>
