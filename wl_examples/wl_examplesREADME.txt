@@ -13,7 +13,7 @@ xdg-shell-protocols.cpp | Needs to reside in the working directory,
     MODIFY xdg-shell-protocol.cpp TO SUIT g++ COMPILER AS FOLLOWS:-
     1) Delete the first 52 lines e.g. all includes and externs
     2] Replace with #include <wayland-util.h>
-        and         #include "xdg-shell-protocol.h"
+        and         #include "xdg-shell-client-protocol.h"
     3) Remove all WL_PRIVATE prepends (all 5 of them).
 
    ** note **    xdg-shell-client-protocol.h   is also needed in the
