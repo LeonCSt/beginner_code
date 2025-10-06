@@ -38,7 +38,7 @@ wl_pointer *pntr;
 wl_cursor *crsr;
 wl_cursor_image *crsr_img;
 wl_keyboard *kybrd;
-unsigned *p; // pixel array for window and cursors
+unsigned *p; // pixel array for window
 bool xit = false, redraw = true;
 int hrdwrX, hrdwrY;
 int surfwidth, surfheight;
