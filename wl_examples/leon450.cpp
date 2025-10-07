@@ -47,7 +47,7 @@ unsigned pntr_serial;
 int pcrsr = 0; //present cursor
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
-	int height, wl_array *states) {
+        int height, wl_array *states) {
   surfwidth = width; surfheight = height;
 }
 
@@ -56,11 +56,11 @@ void top_close(void *data, xdg_toplevel *xdgtop) {
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
-//	int32_t width, int32_t height) {
+//        int32_t width, int32_t height) {
 //}
 
 void top_wm_capabils(void *data, xdg_toplevel *xdgtop,
-	wl_array *caps) {
+        wl_array *caps) {
 }
 
 xdg_toplevel_listener top_lstnr = {
@@ -71,29 +71,29 @@ xdg_toplevel_listener top_lstnr = {
 };
 
 void kybrd_keymap(void *data, wl_keyboard *kybrd, unsigned format,
-	int fd, unsigned size) {
+        int fd, unsigned size) {
 }
 
 void kybrd_enter(void *data, wl_keyboard *kybrd, unsigned serial,
-	wl_surface *surf, wl_array *keys) {
+        wl_surface *surf, wl_array *keys) {
 }
 
 void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
-	wl_surface *surf) {
+        wl_surface *surf) {
 }
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
-	unsigned time, unsigned key, unsigned state) {
+        unsigned time, unsigned key, unsigned state) {
   if (key == 16 || key == 1) xit = true;
 }
 
 void kybrd_modifiers(void *data, wl_keyboard *kybrd, unsigned serial,
-	unsigned mods_depressed, unsigned mods_latched,
-	unsigned mods_locked, unsigned group) {
+        unsigned mods_depressed, unsigned mods_latched,
+        unsigned mods_locked, unsigned group) {
 }
 
 void kybrd_repeat(void *data, wl_keyboard *kybrd, int rate,
-	int delay) {
+        int delay) {
 }
 
 wl_keyboard_listener kybrd_lstnr = {
@@ -106,7 +106,7 @@ wl_keyboard_listener kybrd_lstnr = {
 };
 
 void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
-	wl_surface *surf, wl_fixed_t surf_x, wl_fixed_t surf_y) {
+        wl_surface *surf, wl_fixed_t surf_x, wl_fixed_t surf_y) {
   pntr_serial = serial;
   crsr = wl_cursor_theme_get_cursor(crsr_theme, "left_ptr");
   crsr_img = crsr->images[0];
@@ -127,7 +127,7 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
 }
 
 void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
-	unsigned time, unsigned button, unsigned state) {
+        unsigned time, unsigned button, unsigned state) {
   if (state == 1) return;
   pcrsr++;
   if (pcrsr == 3) pcrsr = 0;
@@ -257,8 +257,7 @@ void output_geometry(void* data, wl_output *wl_output,
 }
 
 void output_mode(void *data, wl_output *wl_output,
-        unsigned flags, int width, int height,
-	int refresh) {
+        unsigned flags, int width, int height, int refresh) {
   hrdwrX = width; hrdwrY = height;
 }
 
