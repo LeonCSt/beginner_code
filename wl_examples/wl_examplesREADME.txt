@@ -35,7 +35,7 @@ leon450.cpp enables pointer events and uses system cursors. Needs
    -lwayland-cursor appended to g++ string. Still no keymap, just
    linux keycodes.
 
-leon460.cpp does not use <wayland=cursor.h>, but generates it's own
+leon460.cpp does not use <wayland-cursor.h>, but generates it's own
    cursors which are stored in the main shm_pool. No need for the
    -lwayland-cursor linker on g++ command. Can be used as-is to create
    your own cursors if the following edits are made: -
