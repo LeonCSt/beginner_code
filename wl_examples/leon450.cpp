@@ -5,7 +5,7 @@
 
     *needs*  xdg-shell-protocol.cpp  and  xdg-shell-client-protocol.h
 
-    g++ xdg-shell-protocol.cpp leon440.cpp -o leon -lwayland-client -lwayland-cursor
+    g++ xdg-shell-protocol.cpp leon450.cpp -o leon -lwayland-client -lwayland-cursor
                                                             [251003] */
 
 #include <sys/syscall.h>
@@ -198,7 +198,7 @@ void draw() {
   bffwdth = surfwidth; bffhght = surfheight;
   buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
           bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
-  unsigned d, c = 0xffaaaa66;
+  unsigned c = 0xffaaaa66;
   int i, j, m, n, o;
   int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
   double r;
