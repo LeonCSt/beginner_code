@@ -105,7 +105,7 @@ void condense_image(int offset) {
           r += ((f[l] & 0xff0000) >> 16);
           g += ((f[l] & 0xff00) >> 8);
           b += (f[l] & 0xff);
-	}
+        }
       }
       a /= 16.0; r /= 16.0; g /= 16.0; b /= 16.0;
       a += 0.5; r += 0.5; g += 0.5; b += 0.5;
@@ -183,10 +183,10 @@ void closed_path_fill(int *q, int length, unsigned color) {
       d = false;
       while (f[l] != c) {
         l++; k++;
-	if (k == fwdth) {
+        if (k == fwdth) {
           d = true;
           break;
-	}
+        }
       }
       if (d) break;
       if (k > 0) {
@@ -196,10 +196,10 @@ void closed_path_fill(int *q, int length, unsigned color) {
       d = true;
       while (d) {
         if (f[l] != c) {
-	  d = false; break;
-	}
+          d = false; break;
+        }
         l++; k++;
-	if (k == fwdth) break;
+        if (k == fwdth) break;
       }
       if (d) break;
       n = l + fwdth;
@@ -267,13 +267,13 @@ void cursors_draw() {
   for (i = 0; i < 19712; i++) f[i] = 0;
   fwdth = crsr[14] * 4; fhght = crsr[15] * 4;
   int k[] = {0, 0, 41, 0, 41, 17, 29, 17, 29, 68,
-	     41, 68, 41, 85, 0, 85, 0, 68, 12, 68,
-	     12, 17, 0, 17, 0, 0};
+             41, 68, 41, 85, 0, 85, 0, 68, 12, 68,
+             12, 17, 0, 17, 0, 0};
   closed_path_fill(&k[0], 26, a);
   int l[] = {6, 6, 18, 6, 21, 9, 24, 6, 35, 6,
              35, 11, 28, 11, 23, 16, 23, 69, 28, 74,
-	     35, 74, 35, 79, 24, 79, 21, 76, 18, 79,
-	     6, 79, 6, 74, 13, 74, 18, 69, 18, 16,
+             35, 74, 35, 79, 24, 79, 21, 76, 18, 79,
+             6, 79, 6, 74, 13, 74, 18, 69, 18, 16,
              13, 11, 6, 11, 6, 6};
   closed_path_fill(&l[0], 46, b);
   condense_image(j + 1232);
@@ -302,7 +302,6 @@ void cursors_draw() {
           40, 78, 35, 78, 33, 76, 17, 44, 6, 55, 6, 10};
   closed_path_fill(&r[0], 22, b);
   condense_image(j);
-
 }
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
@@ -319,7 +318,7 @@ void top_close(void *data, xdg_toplevel *xdgtop) {
 //}
 
 void top_wm_capabils(void *data, xdg_toplevel *xdgtop,
-	wl_array *caps) {
+        wl_array *caps) {
 }
 
 xdg_toplevel_listener top_lstnr = {
@@ -409,11 +408,11 @@ void pntr_axis_source(void *data, wl_pointer *pntr,
 }
 
 //void pntr_axis_stop(void *data, wl_pointer *pntr, uint32_t time,
-//	uint32_t axis) {
+//        uint32_t axis) {
 //}
 
 //void pntr_axis_discrete(void *data, wl_pointer *pntr, uint32_t axis,
-//	int32_t discrete) {
+//        int32_t discrete) {
 //}
 
 void pntr_axis_value120(void *data, wl_pointer *pntr, unsigned axis,
