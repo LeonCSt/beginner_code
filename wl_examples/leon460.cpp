@@ -67,12 +67,14 @@ void scale_cursors() {
 
 void cast_cursor(int num, int X, int Y) {
   unsigned d;
-  int c, i, j, m, o;
+  int c, i, j, k, l, m, o;
   double r;
   c = hrdwrX * hrdwrY + num * 1232;
-  for (j = Y; j < crsr[num * 9 + 6] * 10 + Y; j++) {
+  l = crsr[num * 9 + 6] * 10 + Y;
+  for (j = Y; j < l; j++) {
     m = c;
-    for (i = X; i < crsr[num * 9 + 5] * 10 + X; i++) {
+    k = crsr[num * 9 + 5] * 10 + X;
+    for (i = X; i < k; i++) {
       d = 0xff000000;
       r = 1 - ((p[m] & 0xff000000) >> 24) / 255.0;
       o = ((p[m] & 0xff0000) >> 16) + r *
@@ -92,14 +94,17 @@ void cast_cursor(int num, int X, int Y) {
 
 void condense_image(int offset) {
      // 16 subpixels are mixed into a final pixel
-  int i, j, k, l, m;
+  int i, j, k, l, m, n, o, q;
   unsigned char ca, cr, cg, cb;
   double a, r, g, b, d;
   k = offset;
-  for (j = 0; j < (fwdth * fhght); j += (4 * fwdth)) {
-    for (i = j; i < (j + fwdth); i += 4) {
+  o = fwdth * fhght;
+  for (j = 0; j < o; j += (4 * fwdth)) {
+    n = j + fwdth;
+    for (i = j; i < n; i += 4) {
       a = 0; r = 0; g = 0; b = 0;
-      for (m = i; m < (i + (4 * fwdth)); m += fwdth) {
+      q = i + 4 * fwdth;
+      for (m = i; m < q; m += fwdth) {
         for (l = m; l < (m + 4); l++) {
           a += ((f[l] & 0xff000000) >> 24);
           r += ((f[l] & 0xff0000) >> 16);
@@ -295,11 +300,11 @@ void cursors_draw() {
   for (i = 0; i < 19712; i++) f[i] = 0;
   fwdth = crsr[5] * 4; fhght = crsr[6] * 4;
   int q[] = {0, 0, 3, 0, 55, 39, 55, 42, 34, 44,
-          48, 72, 47, 78, 45, 81, 42, 83, 38, 84,
-          33, 84, 30, 81, 16, 53, 0, 69, 0, 0};
+             48, 72, 47, 78, 45, 81, 42, 83, 38, 84,
+             33, 84, 30, 81, 16, 53, 0, 69, 0, 0};
   closed_path_fill(&q[0], 30, a);
   int r[] = {6, 10, 43, 38, 24, 39, 42, 72, 42, 76,
-          40, 78, 35, 78, 33, 76, 17, 44, 6, 55, 6, 10};
+             40, 78, 35, 78, 33, 76, 17, 44, 6, 55, 6, 10};
   closed_path_fill(&r[0], 22, b);
   condense_image(j);
 }
@@ -451,7 +456,7 @@ void draw() {
   buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
           bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
   unsigned d, c = 0xffaaaa66;
-  int i, j, m, n, o;
+  int i, j, l, m, n, o;
   int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
   double r;
   for (i = 0; i < (bffwdth * bffhght); i++) p[i] = 0xff000022;
@@ -481,13 +486,15 @@ void draw() {
             //Section: show foundry
   if (crsrscale == 1.0 && bffwdth >= 832 && bffhght >= 540) {
     c = 0;
-    for (j = 12; j < fhght * 6 + 12; j++) {
+    l = fhght * 6 + 12;
+    for (j = 12; j < l; j++) {
       if (j % 6 == 5) {
         c += fwdth;
         continue;
       }
       m = c;
-      for (i = 12; i < fwdth * 6 + 12; i++) {
+      n = fwdth * 6 + 12;
+      for (i = 12; i < n; i++) {
         if (i % 6 == 5) {
           m++;
           continue;
