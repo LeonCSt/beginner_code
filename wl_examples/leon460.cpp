@@ -459,7 +459,8 @@ void draw() {
   int i, j, l, m, n, o;
   int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
   double r;
-  for (i = 0; i < (bffwdth * bffhght); i++) p[i] = 0xff000022;
+  j = bffwdth * bffhght;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
             //Section: Circle
   if (bffwdth <= bffhght) r = bffwdth * 0.45;
   else r = bffhght * 0.45;
