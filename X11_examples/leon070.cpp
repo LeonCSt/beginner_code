@@ -88,9 +88,9 @@ void findcrsrpos() {
       while (pos < ls[j + 1]) {
         caretx = tally;
         if (doc[pos] < 128) num = 1;
-        else if (doc[pos] & 224 == 192) num = 2;
-        else if (doc[pos] & 240 == 224) num = 3;
-        else if (doc[pos] & 248 == 240) num = 4;
+        else if ((doc[pos] & 224) == 192) num = 2;
+        else if ((doc[pos] & 240) == 224) num = 3;
+        else if ((doc[pos] & 248) == 240) num = 4;
         else num = 1;
         if (doc[pos] == '\t') {
           strng = "\t";
@@ -228,9 +228,9 @@ void castlines() {
       carety = nlines * 35;
     }
     if (doc[pos] < 128) num = 1;
-    else if (doc[pos] & 224 == 192) num = 2;
-    else if (doc[pos] & 240 == 224) num = 3;
-    else if (doc[pos] & 248 == 240) num = 4;
+    else if ((doc[pos] & 224) == 192) num = 2;
+    else if ((doc[pos] & 240) == 224) num = 3;
+    else if ((doc[pos] & 248) == 240) num = 4;
     else num = 1;
     if (doc[pos] == '\n') {
       ls.insert(ls.begin() + nlines, histpos);
