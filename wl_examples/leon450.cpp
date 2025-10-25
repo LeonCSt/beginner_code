@@ -4,6 +4,7 @@
       [Q] or [ESC] to close
 
     *needs*  xdg-shell-protocol.cpp  and  xdg-shell-client-protocol.h
+             see wl_examplesREADME.txt
 
     g++ xdg-shell-protocol.cpp leon450.cpp -o leon -lwayland-client -lwayland-cursor
                                                             [251003] */
@@ -112,7 +113,7 @@ void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
   crsr_img = crsr->images[0];
   crsr_buff = wl_cursor_image_get_buffer(crsr_img);
   wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
-          crsr_img->width, crsr_img->height);
+          crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
   wl_surface_commit(crsr_surf);
   pcrsr = 0;
@@ -139,7 +140,7 @@ void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
   crsr_img = crsr->images[0];
   crsr_buff = wl_cursor_image_get_buffer(crsr_img);
   wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
-          crsr_img->width, crsr_img->height);
+          crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
   wl_surface_commit(crsr_surf);
 }
