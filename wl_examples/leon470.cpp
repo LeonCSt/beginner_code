@@ -103,7 +103,7 @@ void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
       if (b[k] == 0) {k++; continue;}
       if (b[k] == 255) {
         p[Y * bffwdth + l] = fg;
-	k++; continue;
+        k++; continue;
       }
       d = 0xff000000;
       r = gc[b[k]] / 255.0;
@@ -492,24 +492,3 @@ int main() {
   wl_shm_pool_destroy(pool);
   wl_display_disconnect(dis);
 }
-
-//  grayscale = R * 0.3 + G * 0.59 + B * 0.11
-//  i = strlen(reinterpret_cast<const char*>(doc));
-//  printf("length = %d\n", i);
-/*  unsigned gi = FT_Get_Char_Index(face, 0x30); //arrow 0x2190 D 0x44
-          //j 0x6a
-  printf("glyph index =  %u         ", gi);
-  printf("glyph index =  0x%x\n", gi);
-  if (FT_Load_Glyph(face, gi, 0)) printf("failed to load \n");
-  else printf("glyph loaded!\n");
-  printf("advance  = %d\n", face->glyph->advance.x >> 6);
-  printf("width  = %d\n", face->glyph->bitmap.width);
-  printf("rows  = %d\n", face->glyph->bitmap.rows);
-  printf("left  = %d\n", face->glyph->bitmap_left);
-  printf("top  = -%d\n", face->glyph->bitmap_top);
-  if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL))
-          printf("failed to render\n");
-  else printf("glyph now rendered!\n");
-  unsigned char *b = &face->glyph->bitmap.buffer[0];
-  printf("byte n  = %d\n", b[0]);  */
-//  printf("doc[49] =  %d\n", doc[49]);
