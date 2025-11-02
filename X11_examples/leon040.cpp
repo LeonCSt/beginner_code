@@ -97,7 +97,7 @@ void init() {
   int top = (XDisplayHeight(dis, 0) - 900) / 2;
   win = XCreateWindow(dis, XDefaultRootWindow(dis), left, top,
           1200, 900, 1, DefaultDepth(dis,0), InputOutput,
-	  DefaultVisual(dis, 0), attriMask, &winAttr);
+          DefaultVisual(dis, 0), attriMask, &winAttr);
   WM_DELETE_WINDOW = XInternAtom(dis, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(dis, win, &WM_DELETE_WINDOW, 1);
   XSizeHints sh; XWMHints hnts; XTextProperty nm, icnm;
@@ -153,7 +153,7 @@ int main() {
           XGrabPointer(dis, XDefaultRootWindow(dis) , false,
                   ButtonPressMask | PointerMotionMask,
                   GrabModeAsync, GrabModeAsync, None, None,
-		  CurrentTime);
+                  CurrentTime);
           f[2] = true;
         }
         break;
