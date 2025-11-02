@@ -51,7 +51,6 @@ bool xit = false, redraw = true;
 int hrdwrX, hrdwrY;
 int surfwidth, surfheight;
 int bffwdth, bffhght;
-unsigned pntr_serial;
 int txthght, mX, mY;
 
 void microview() {
@@ -254,11 +253,10 @@ wl_keyboard_listener kybrd_lstnr = {
 
 void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
         wl_surface *surf, wl_fixed_t surf_x, wl_fixed_t surf_y) {
-  pntr_serial = serial;
   crsr = wl_cursor_theme_get_cursor(crsr_theme, "left_ptr");
   crsr_img = crsr->images[0];
   crsr_buff = wl_cursor_image_get_buffer(crsr_img);
-  wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
+  wl_pointer_set_cursor(pntr, serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
   wl_surface_commit(crsr_surf);
@@ -271,9 +269,9 @@ void pntr_leave(void *data, wl_pointer *pntr, unsigned serial,
 void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
-  if (redraw && mX > 9 && mX < bffwdth - 10
-            && mY > 14 && mY < bffhght) {
-    microview();
+  if (redraw && mX > 7 && mX < bffwdth - 8
+            && mY > 9 && mY < bffhght - 10) {
+    thread t2(microview); t2.detatch;
   } 
 }
 
