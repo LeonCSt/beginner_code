@@ -85,7 +85,11 @@ void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
         unsigned time, unsigned key, unsigned state) {
-  if (key == 16 || key == 1) xit = true;
+  if (state == 1) {
+  }
+  else {
+    if (key == 16 || key == 1) xit = true;
+  } 
 }
 
 void kybrd_modifiers(void *data, wl_keyboard *kybrd, unsigned serial,
@@ -203,7 +207,8 @@ void draw() {
   int i, j, m, n, o;
   int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
   double r;
-  for (i = 0; i < (bffwdth * bffhght); i++) p[i] = 0xff000022;
+  j = bffwdth * bffhght;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
             //Section: Circle
   if (bffwdth <= bffhght) r = bffwdth * 0.45;
   else r = bffhght * 0.45;
