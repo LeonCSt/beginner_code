@@ -150,9 +150,10 @@ void draw() {
   bffwdth = surfwidth; bffhght = surfheight;
   buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
           bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
-  for (int i = 0; i < (bffwdth * bffhght); i++) p[i] = 0x000022;
+  int c = 0xaaaa66, i, j, m, n, o;
+  j = bffwdth * bffhght;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
   double r; 
-  int c = 0xaaaa66, j, m, n, o;
   int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
   if (bffwdth <= bffhght) r = bffwdth * 0.45;
   else r = bffhght * 0.45;
