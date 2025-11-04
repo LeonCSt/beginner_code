@@ -347,7 +347,11 @@ void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
         unsigned time, unsigned key, unsigned state) {
-  if (key == 16 || key == 1) xit = true;
+  if (state == 1) {
+  }
+  else {
+    if (key == 16 || key == 1) xit = true;
+  }
 }
 
 void kybrd_modifiers(void *data, wl_keyboard *kybrd, unsigned serial,
