@@ -1,6 +1,6 @@
 /*  leon470.cpp | render *.otf and *.ttf fonts
       use  fc-list | grep "\.otf"  or  "\.ttf"  to see your system fonts
-      modify line 481 to change fonts
+      modify line 484 to change fonts
       [Q] or [ESC] to close
 
     *needs*  xdg-shell-protocol.cpp  and  xdg-shell-client-protocol.h
@@ -47,7 +47,7 @@ wl_keyboard *kybrd;
 FT_Library lbrry;
 FT_Face face;
 unsigned *p; // pixel array for window
-bool xit = false, redraw = true;
+bool xit = false, redraw = true, key_dwn = false;
 int hrdwrX, hrdwrY;
 int surfwidth, surfheight;
 int bffwdth, bffhght;
@@ -99,20 +99,21 @@ void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
     for (l = X; l < i; l++) {
-      if (b[k] == 0) {k++; continue;}
-      if (b[k] == 255) {
+      if (b[k] == 0) {}
+      else if (b[k] == 255) {
         p[Y * bffwdth + l] = fg;
-        k++; continue;
       }
-      d = 0xff000000;
-      r = gc[b[k]] / 255.0;
-      o = r * fR + (1 - r) * bR + 0.5;
-      d += o << 16;
-      o = r * fG + (1 - r) * bG + 0.5;
-      d += o << 8;
-      o = r * fB + (1 - r) * bB + 0.5;
-      d += o;
-      p[Y * bffwdth + l] = d;
+      else {
+        d = 0xff000000;
+        r = gc[b[k]] / 255.0;
+        o = r * fR + (1 - r) * bR + 0.5;
+        d += o << 16;
+        o = r * fG + (1 - r) * bG + 0.5;
+        d += o << 8;
+        o = r * fB + (1 - r) * bB + 0.5;
+        d += o;
+        p[Y * bffwdth + l] = d;
+      }
       k++;
     }
   }
@@ -230,7 +231,11 @@ void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
         unsigned time, unsigned key, unsigned state) {
-  if (key == 16 || key == 1) xit = true;
+  if (state == 1) key_dwn = true;
+  else {
+    key_dwn = false;
+    if (key == 16 || key == 1) xit = true;
+  } 
 }
 
 void kybrd_modifiers(void *data, wl_keyboard *kybrd, unsigned serial,
@@ -269,7 +274,7 @@ void pntr_leave(void *data, wl_pointer *pntr, unsigned serial,
 void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
-  if (redraw && mX > 7 && mX < bffwdth - 8
+  if (!key_dwn && redraw && mX > 7 && mX < bffwdth - 8
             && mY > 9 && mY < bffhght - 10) {
     thread t2(microview); t2.detach();
   } 
@@ -334,8 +339,9 @@ void draw() {
   buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
           bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
   unsigned c = 0xffaaaa66, b = 0xff000022;
-  int i;
-  for (i = 0; i < (bffwdth * bffhght); i++) p[i] = b;
+  int i, j;
+  j = bffwdth * bffhght;
+  for (i = 0; i < j; i++) p[i] = b;
 
                 //Section: text rendering
   unsigned char doc[] = "\tSimple rendering with extra strengthening on edge pixels (pseudo gamma correction). No kerning. Assuming 'flat' background. Does not offer texture or gradient foreground.\n\tUtf8 encoding L♡VE, j☺y, Pe☮ce.\n\tBecause it uses FreeType2, almost any level of complexity can be added to this basic approach..\n\tRegards ←";
@@ -356,7 +362,7 @@ void draw() {
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
   if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
     xdg_surface_ack_configure(xdgsurf, serial);
-    thread t1(draw); t1.detach();
+    draw();
   }
 }
 
