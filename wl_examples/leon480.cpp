@@ -393,7 +393,9 @@ void draw_resize() {
   buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
           bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
   unsigned c = 0xffaaaa66, b = 0xff000022;
-  for (int i = 0; i < (bffwdth * bffhght); i++) p[i] = b;
+  int i, j;
+  j = bffwdth * bffhght;
+  for (int i = 0; i < j; i++) p[i] = b;
   unsigned char doc[] = "Some text";
   fill_rectangle(rectX, rectY, 50, 80, 0xffaaaa66);
   text_run(txtX - 54, txtY, &doc[0], 9, 0xffaaaa66, 0xff000022);
