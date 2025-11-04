@@ -271,7 +271,7 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
   if (redraw && mX > 7 && mX < bffwdth - 8
             && mY > 9 && mY < bffhght - 10) {
-    thread t2(microview); t2.detatch;
+    thread t2(microview); t2.detach();
   } 
 }
 
@@ -355,8 +355,8 @@ void draw() {
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
   if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
-    thread t1(draw); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
+    thread t1(draw); t1.detach();
   }
 }
 
