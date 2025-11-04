@@ -115,7 +115,7 @@ void condense_image(int offset) {
       a /= 16.0; r /= 16.0; g /= 16.0; b /= 16.0;
       a += 0.5; r += 0.5; g += 0.5; b += 0.5;
       ca = a; cr = r; cg = g; cb = b;
-      p[k] = ca * 0x1000000 + cr * 0x10000 + cg * 0x100 + cb;
+      p[k] = (ca << 24) + (cr << 16) + (cg << 8) + cb;
       k++;
     }
   }
@@ -524,8 +524,8 @@ void draw() {
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
   if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
-    thread t1(draw); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
+    thread t1(draw); t1.detach();
   }
 }
 
