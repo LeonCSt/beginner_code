@@ -528,8 +528,8 @@ void draw() {
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
   if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
-    xdg_surface_ack_configure(xdgsurf, serial);
     thread t1(draw); t1.detach();
+    xdg_surface_ack_configure(xdgsurf, serial);
   }
 }
 
