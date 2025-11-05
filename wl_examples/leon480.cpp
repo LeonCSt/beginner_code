@@ -395,7 +395,7 @@ void draw_resize() {
   unsigned c = 0xffaaaa66, b = 0xff000022;
   int i, j;
   j = bffwdth * bffhght;
-  for (int i = 0; i < j; i++) p[i] = b;
+  for (i = 0; i < j; i++) p[i] = b;
   unsigned char doc[] = "Some text";
   fill_rectangle(rectX, rectY, 50, 80, 0xffaaaa66);
   text_run(txtX - 54, txtY, &doc[0], 9, 0xffaaaa66, 0xff000022);
@@ -406,8 +406,8 @@ void draw_resize() {
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
   if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+    thread t3(draw_resize); t3.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
-    draw_resize();
   }
 }
 
