@@ -23,7 +23,6 @@
 #include <cstring>
 #include <string>
 #include <thread>
-#include <math.h>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
 
@@ -82,10 +81,10 @@ void microview() {
   wl_surface_commit(surf);
 }
 
-void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
-          unsigned char* gc) {
-  if (Y < 0 || Y > bffhght - face->glyph->bitmap.rows
-          || X < 0 || X > bffwdth - face->glyph->bitmap.width) return;
+void draw_glyph(unsigned *m, int buffW, int buffH, int X, int Y,
+        unsigned fg, unsigned bg, unsigned char* gc) {
+  if (Y < 0 || Y > buffH - face->glyph->bitmap.rows
+          || X < 0 || X > buffW - face->glyph->bitmap.width) return;
   if(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *b = &face->glyph->bitmap.buffer[0];
@@ -101,7 +100,7 @@ void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
     for (l = X; l < i; l++) {
       if (b[k] == 0) {}
       else if (b[k] == 255) {
-        p[Y * bffwdth + l] = fg;
+        m[Y * buffW + l] = fg;
       }
       else {
         d = 0xff000000;
@@ -112,20 +111,20 @@ void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        p[Y * bffwdth + l] = d;
+        m[Y * buffW + l] = d;
       }
       k++;
     }
   }
 }
 
-void text_run(int X, int Y, unsigned char *str, int length,
-        unsigned fg, unsigned bg) {
+void text_run(unsigned *m, int buffW, int buffH, int X, int Y,
+        unsigned char *str, int length, unsigned fg, unsigned bg) {
   int pos = 0, num, i, j = 0;
   unsigned u, gi;
   double c, d;
   unsigned char gc[256];  // gamma correction table
-  if (X > bffwdth - 50 || X < 0 || Y > bffhght - 10 || Y < 30) return;
+  if (X > buffW - 50 || X < 0 || Y > buffH - 10 || Y < 30) return;
                     //Section: make table
   unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
                         23, 27, 32, 39}; //curve
@@ -164,13 +163,13 @@ void text_run(int X, int Y, unsigned char *str, int length,
     if (u == 0) break;
     else if (u == 10) {
       X = 30; Y += txthght + 5;
-      if (Y > bffhght - 10) break;
+      if (Y > buffH - 10) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bffwdth - 50) {
+      if (X > buffW - 50) {
         X = 30; Y += txthght + 5;
-        if (Y > bffhght - 10) break;
+        if (Y > buffH - 10) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -180,13 +179,13 @@ void text_run(int X, int Y, unsigned char *str, int length,
       gi = FT_Get_Char_Index(face, u);
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
-        draw_glyph(face->glyph->bitmap_left + X,
+        draw_glyph(m, buffW, buffH, face->glyph->bitmap_left + X,
                 Y - face->glyph->bitmap_top, fg, bg, &gc[0]);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bffwdth - 50) {
+      if (X > buffW - 50) {
         X = 30; Y += txthght + 5;
-        if (Y > bffhght - 10) break;
+        if (Y > buffH - 10) break;
       }
     }
     pos += num;
@@ -346,8 +345,11 @@ void draw() {
                 //Section: text rendering
   unsigned char doc[] = "\tSimple rendering with extra strengthening on edge pixels (pseudo gamma correction). No kerning. Assuming 'flat' background. Does not offer texture or gradient foreground.\n\tUtf8 encoding L♡VE, j☺y, Pe☮ce.\n\tBecause it uses FreeType2, almost any level of complexity can be added to this basic approach..\n\tRegards ←";
   i = strlen(reinterpret_cast<const char*>(doc));
-  text_run(30, 100, &doc[0], i, c, b);
-/* format: text_run(int             penX,
+  text_run(p, bffwdth, bffhght, 30, 100, &doc[0], i, c, b);
+/* format: text_run(unsigned*       pointer to buffer begin in memory
+                    int             buffer width
+		    int             buffer height
+                    int             penX,
                     int             penY,
                     unsigned char*  pointer to start position,
                     int             length of encoding in bytes,
