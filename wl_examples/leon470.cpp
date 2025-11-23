@@ -1,6 +1,6 @@
 /*  leon470.cpp | render *.otf and *.ttf fonts
       use  fc-list | grep "\.otf"  or  "\.ttf"  to see your system fonts
-      modify line 484 to change fonts
+      modify line 487 to change fonts
       [Q] or [ESC] to close
 
     *needs*  xdg-shell-protocol.cpp  and  xdg-shell-client-protocol.h
@@ -348,7 +348,7 @@ void draw() {
   text_run(p, bffwdth, bffhght, 30, 100, &doc[0], i, c, b);
 /* format: text_run(unsigned*       pointer to buffer begin in memory
                     int             buffer width
-		    int             buffer height
+                    int             buffer height
                     int             penX,
                     int             penY,
                     unsigned char*  pointer to start position,
