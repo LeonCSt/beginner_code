@@ -1,7 +1,8 @@
 /*  leon070.cpp:   using the X11 clipboard
     select, cut and paste text - using the clipboard
-    [mouse drag] select      [C] cut      [P] paste or [middlemouse btn]
-    g++ leon070.cpp -o leon -lX11 -lXft -lfontconfig -I/usr/include/freetype2
+    [mouse drag] select     [C] cut     [P] paste or [middlemouse btn]
+    example  = "Utf8 encoding L♡VE, j☺y, pe☮ce. Regards ←"
+    g++ leon.cpp -o leon -lX11 -lXft -lfontconfig -I/usr/include/freetype2
                                                           [250707]  */
 
 #include <X11/Xlib.h>
@@ -129,14 +130,14 @@ void drawtxtbx() {
         XftDrawStringUtf8(draw, &colr, font, 20, j,
                 (unsigned char*)strng.c_str(), strng.size());
       }
-      else if ((histcaret == ls[i]) && (caret == ls[i + 1])) {
+      else if ((histcaret <= ls[i]) && (caret >= ls[i + 1])) {
         XFillRectangle(dis, txtbx, tgc, 20, j - 27, ll[i], 35);
         strng.assign(doc.begin() + ls[i], doc.begin() + ls[i + 1]);
         if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
         XftDrawStringUtf8(draw, &hghcolr, font, 20, j,
                 (unsigned char*)strng.c_str(), strng.size());
       }
-      else if ((histcaret == ls[i]) && (caret < ls[i + 1])) {
+      else if ((histcaret <= ls[i]) && (caret < ls[i + 1])) {
         XFillRectangle(dis, txtbx, tgc, 20, carety, caretx - 20, 35);
         strng.assign(doc.begin() + ls[i], doc.begin() + caret);
         XftDrawStringUtf8(draw, &hghcolr, font, 20, j,
@@ -146,7 +147,7 @@ void drawtxtbx() {
         XftDrawStringUtf8(draw, &colr, font, caretx, j,
                 (unsigned char*)strng.c_str(), strng.size());
       }
-      else if (histcaret > ls[i] && caret == ls[i + 1]) {
+      else if (histcaret > ls[i] && caret >= ls[i + 1]) {
         strng.assign(doc.begin() + ls[i], doc.begin() + histcaret);
         XftDrawStringUtf8(draw, &colr, font, 20, j,
                 (unsigned char*)strng.c_str(), strng.size());
@@ -157,14 +158,7 @@ void drawtxtbx() {
         XftDrawStringUtf8(draw, &hghcolr, font, histcaretx, j,
                 (unsigned char*)strng.c_str(), strng.size());
       }
-      else if (histcaret < ls[i] && caret == ls[i + 1]) {
-        XFillRectangle(dis, txtbx, tgc, 20, j - 27, ll[i], 35);
-        strng.assign(doc.begin() + ls[i], doc.begin() + ls[i + 1]);
-        if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
-        XftDrawStringUtf8(draw, &hghcolr, font, 20, j,
-                (unsigned char*)strng.c_str(), strng.size());
-      }
-      else if (histcarety == carety) {
+      else {
         strng.assign(doc.begin() + ls[i], doc.begin() + histcaret);
         XftDrawStringUtf8(draw, &colr, font, 20, j,
                 (unsigned char*)strng.c_str(), strng.size());
@@ -176,34 +170,6 @@ void drawtxtbx() {
         strng.assign(doc.begin() + caret, doc.begin() + ls[i + 1]);
         if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
         XftDrawStringUtf8(draw, &colr, font, caretx, j,
-                (unsigned char*)strng.c_str(), strng.size());
-      }
-      else if (histcarety == j - 27) {
-        strng.assign(doc.begin() + ls[i], doc.begin() + histcaret);
-        XftDrawStringUtf8(draw, &colr, font, 20, j,
-                (unsigned char*)strng.c_str(), strng.size());
-        XFillRectangle(dis, txtbx, tgc, histcaretx, histcarety,
-                ll[i] - histcaretx + 20, 35);
-        strng.assign(doc.begin() + histcaret, doc.begin() + ls[i + 1]);
-        if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
-        XftDrawStringUtf8(draw, &hghcolr, font, histcaretx, j,
-                (unsigned char*)strng.c_str(), strng.size());
-      }
-      else if (carety == j - 27) {
-        XFillRectangle(dis, txtbx, tgc, 20, carety, caretx - 20, 35);
-        strng.assign(doc.begin() + ls[i], doc.begin() + caret);
-        XftDrawStringUtf8(draw, &hghcolr, font, 20, j,
-                (unsigned char*)strng.c_str(), strng.size());
-        strng.assign(doc.begin() + caret, doc.begin() + ls[i + 1]);
-        if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
-        XftDrawStringUtf8(draw, &colr, font, caretx, j,
-                (unsigned char*)strng.c_str(), strng.size());
-      }
-      else {
-        XFillRectangle(dis, txtbx, tgc, 20, j - 27, ll[i], 35);
-        strng.assign(doc.begin() + ls[i], doc.begin() + ls[i + 1]);
-        if (doc[ls[i + 1] - 1] == '\n') strng.pop_back();
-        XftDrawStringUtf8(draw, &hghcolr, font, 20, j,
                 (unsigned char*)strng.c_str(), strng.size());
       }
       j += 35;
