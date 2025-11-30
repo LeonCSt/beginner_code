@@ -48,12 +48,25 @@ void d_pntr_motion();
 void d_pntr_button();
 
 int text_width(unsigned char* str, int length);
+	/*  unsigned char *str | pointer to start in utf8 byte array
+	    int length         | length of encoding to read  */
 
 void text_run(unsigned *m, int bW, int bH, int X, int Y,
         unsigned char *str, int length, unsigned fg, unsigned bg);
+        /*  unsigned *m        | pointer to beginning of buffer pixels
+	    int bW, bH         | buffer width and height
+	    int X, Y           | start position
+	    unsigned char *str | pointer to start in utf8 byte array
+	    int length         | length of encoding to read
+	    unsigned fg, bg    | foreground and background colors   */
 
 void fill_rectangle(unsigned *m, int bW, int bH, int X, int Y,
         int width, int height, unsigned fg);
+        /*  unsigned *m        | pointer to beginning of buffer pixels
+	    int bW, bH         | buffer width and height
+	    int X, Y           | topleft position
+            int width, height  | size
+            unsigned fg        | color  */
 
 void draw_rectangle(unsigned *m, int bW, int bH, int X, int Y,
         int width, int height, unsigned fg);
