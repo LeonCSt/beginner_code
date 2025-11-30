@@ -36,7 +36,7 @@ vector<unsigned char> doc = {0};
 vector<unsigned short> ls = {0};
             // ll[]   list of pixel length of each line
 vector<unsigned short> ll = {0};
-int doclength = 0, caret = 0, nlines = 0, mx, my;
+int doclength = 0, caret = 0, nlines = 0, enddoc, mx, my;
 int caretx, carety, histcaret, histcaretx, histcarety;
             //   operation   0 is none,  1 is gettargets(),
 	    //               2 is getclipboard()
@@ -49,17 +49,14 @@ void gettargets() {
   Atom type, *targets;
   int di;
   unsigned long dul;
-  char *an = NULL;
   XGetWindowProperty(dis, sel_owner_win, gdk_sel, 0,
           1024 * sizeof (Atom), False, XA_ATOM,
           &type, &di, &natoms, &dul, &atom_ret);
-  printf("Targets:\n");
+  printf("You are offering. Target these types: -\n");
   targets = (Atom *)atom_ret;
   for (int i = 0; i < natoms; i++) {
-    an = XGetAtomName(dis, targets[i]);
-    printf("    '%s'\n", an);
+    printf("    '%s'\n", XGetAtomName(dis, targets[i]));
   }
-  if (an) XFree(an);
   XDeleteProperty(dis, sel_owner_win, gdk_sel);
 }
 
@@ -249,6 +246,13 @@ void castlines() {
     pos += num;
   }
 //  printf("number of lines = %d\n", nlines);
+  if (nlines > 12) {
+    caret = ls[12];
+    carety = 385;
+    caretx = ll[11] + 20;
+    enddoc = 480;
+  }
+  else enddoc = 60 + nlines * 35;
 }
 
 void sendtoclipboard() {
@@ -264,11 +268,6 @@ void sendtoclipboard() {
     caret -= j;
     doc.resize(doclength + 1);
     castlines();
-    if (nlines > 12) {
-      caret = ls[12];
-      carety = 385;
-      caretx = ll[11] + 20;
-    }
     if (doclength == 0) {
       blinkeractive = false;
       txtbxactive = false;
@@ -284,9 +283,12 @@ void getclipboard() {
   int actual_format;
   unsigned long nitems, bytes_after;
   if (select_own) nitems = selectn.size();
-  else XGetWindowProperty(dis, win, prop, 0, LONG_MAX/4, False,
+  else {
+    printf("piping in\n");
+    XGetWindowProperty(dis, win, prop, 0, LONG_MAX/4, False,
            AnyPropertyType, &utf8str, &actual_format,
            &nitems, &bytes_after, &bytes);
+  }
   if ((nitems + doclength) > 65534) {
     printf("document plus clipboard contents too large\n");
     if (!select_own) {
@@ -295,6 +297,7 @@ void getclipboard() {
     }
   }
   else {
+    printf("inserting\n");
     doc.resize(doclength + nitems + 1);
     for (int i = doclength; i >= caret; i--) doc[i + nitems] = doc[i];
     int j = caret;
@@ -309,20 +312,13 @@ void getclipboard() {
         doc[j] = bytes[i];
         j++;
       }
+      XFree(bytes);
+      XDeleteProperty(dis, win, prop);
     }
     caret += nitems;
     doclength += nitems;
 //    printf("%.*s", doclength, doc.begin()); printf("\n");
-    if (!select_own) {
-      XFree(bytes);
-      XDeleteProperty(dis, win, prop);
-    }
     castlines();
-    if (nlines > 12) {
-      caret = ls[12];
-      carety = 385;
-      caretx = ll[11] + 20;
-    }
     drawtxtbx();
     paintflag = true;
   }
@@ -443,7 +439,7 @@ void shutdown() {
 int main() {
   init();
   char text;
-  int endline, enddoc;
+  int endline;
   XEvent evnt;
   KeySym key;
   XSelectionRequestEvent *sev;
@@ -472,22 +468,22 @@ int main() {
           }
         }
                     //section:  mouse over text
-        enddoc = 60 + 35 * nlines;
-        if (enddoc > 480) enddoc = 480;
-        if (my < 60 || my > enddoc || nlines == 0) endline = 80;
-        else endline = 80 + ll[(my - 60) / 35];
-        if (my > 60 && my < enddoc && mx > 80
-                && mx < endline && !cursorcaret) {
-          cursorcaret = true;
-          XDefineCursor(dis, win, txtcursor);
-        }
-        else if ((my < 60 || my > enddoc || mx < 80
-                || mx > endline) && cursorcaret) {
-          cursorcaret = false;
-          XDefineCursor(dis, win, None);
-        }
+        if (doclength != 0) {
+          if (my < 60 || my > enddoc || nlines == 0) endline = 80;
+          else endline = 80 + ll[(my - 60) / 35];
+          if (my > 60 && my < enddoc && mx > 80
+                  && mx < endline && !cursorcaret) {
+            cursorcaret = true;
+            XDefineCursor(dis, win, txtcursor);
+          }
+          else if ((my < 60 || my > enddoc || mx < 80
+                  || mx > endline) && cursorcaret) {
+            cursorcaret = false;
+            XDefineCursor(dis, win, None);
+          }
+	}
                     //section: mouse drag to highlight text
-        if (mousedown && my < enddoc) {
+        if (mousedown && my > 60 && my < enddoc) {
           findcrsrpos();
           if (caret > histcaret) {
             highlight = true;
@@ -498,7 +494,7 @@ int main() {
         break;
       case ButtonPress:
         if (evnt.xbutton.button == 1) {
-          if (txtbxfocus) {
+          if (txtbxfocus && my > 60) {
             if (doclength == 0) break;
             findcrsrpos();
             histcaret = caret;
@@ -510,6 +506,7 @@ int main() {
           else {
             txtbxactive = false;
             blinkeractive = false;
+	    highlight = false;
             drawtxtbx();
             paintflag = true;
           }
@@ -535,7 +532,7 @@ int main() {
       case KeyRelease:
         XLookupString(&evnt.xkey, &text, 1, &key, 0);
         if (key == XK_Escape || key == XK_q) loopkeep = false;
-        else if (key == XK_p && txtbxfocus) {
+        else if (key == XK_p && txtbxfocus  && !highlight) {
           if (select_own) getclipboard();
           else {
             operation = 2;
@@ -571,28 +568,20 @@ int main() {
         break;
       case SelectionRequest:
         sev = (XSelectionRequestEvent*)&evnt.xselectionrequest;
-        printf("Requestor: 0x%lx\n", sev->requestor);
-        char *an;
         if (sev->property == None) {
-          an = XGetAtomName(dis, sev->target);
-          printf("Denying request of type '%s'\n", an);
+          printf("Denying request '%s'\n", XGetAtomName(dis, sev->target));
         }
         else if (sev->target == trgts) {
-          an = XGetAtomName(dis, sev->property);
-          printf("Sending Atoms to window 0x%lx, property '%s'\n",
-                  sev->requestor, an);
+          printf("Sending Atoms '%s'\n", XGetAtomName(dis, sev->property));
           XChangeProperty(dis, sev->requestor, sev->property,
                   XA_ATOM, 32, PropModeReplace, atom_ret, natoms);
         }
         else {
-          an = XGetAtomName(dis, sev->property);
-          printf("Sending data to window 0x%lx, property '%s'\n",
-                  sev->requestor, an);
+          printf("Sending data '%s'\n", XGetAtomName(dis, sev->property));
           XChangeProperty(dis, sev->requestor, sev->property,
                   utf8str, 8,  PropModeReplace,
                   (unsigned char *)selectn.c_str(), selectn.size());
         }
-        if (an) XFree(an);
         ssev.property = sev->property;
         ssev.target = sev->target;
         ssev.type = SelectionNotify;
