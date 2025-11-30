@@ -20,7 +20,6 @@
 #include <string>
 #include <thread>
 #include <chrono>
-#include <math.h>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
 
