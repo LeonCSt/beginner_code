@@ -2,7 +2,7 @@ Welcome to my repo.                     [250915]
 
 My current pursuit: C++ programming stand alone GUI client desktop
     applications. In the process of learning how to take the reigns
-    of X11 and Wayland (at a core level if possible), I am in the
+    of X11, Wayland, and Windows (at a core level if possible), I am in the
     habit of creating a progressive set of simple beginner code
     examples. This is for my own benefit, and because they represent
     a lot of hard work and learning, I would like to publish them
