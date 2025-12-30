@@ -58,8 +58,8 @@ void resizeDraw() {
   FillRect(mhdc, &rct, hBrush);
   DeleteObject(hBrush);
   printf("Drawing finished\n"); fflush(stdout);
-  InvalidateRect(hwnd, NULL, FALSE); 
   commit = true;
+  InvalidateRect(hwnd, NULL, FALSE); 
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -93,7 +93,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_SIZE: 
       Ww = LOWORD(lParam); Wh = HIWORD(lParam);
       printf("width %d    height %d\n", Ww, Wh); fflush(stdout);
-      if (Ww < 640 || Wh < 360)  break; //window mimimized
+      if (Ww < 640 || Wh < 360)  break; //window minimized
       if (redraw && (bufW != Ww || bufH != Wh)) { 
               thread t1(resizeDraw); t1.detach(); }
       return 0; 
@@ -125,6 +125,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nShowCmd) {
   wc.lpfnWndProc = WindowProc;
   wc.hInstance = hInstance;
   wc.lpszClassName = L"Main Window";
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
   RegisterClass(&wc);
   hwnd = CreateWindowEx(0, wc.lpszClassName, L"Test GUI - Title Bar Text",
           WS_OVERLAPPEDWINDOW, 480, 270, 960, 540, NULL, NULL, hInstance, NULL);
