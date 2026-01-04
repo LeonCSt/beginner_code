@@ -1,6 +1,6 @@
-/*   leon710.cpp | Window shows. Redraws when resized.                  [251221]
+/*   leon710.cpp | Window shows. Redraws when resized.        [251221]
           Alt F4  or mouse click [X] to close
-	  Allows for direct pixel drawing and using GDI
+          Allows for direct pixel drawing and using GDI
      g++ leon710.cpp -o leon.exe -lgdi32 -mwindows -municode   */
 
 #include <windows.h>
@@ -62,7 +62,8 @@ void resizeDraw() {
   InvalidateRect(hwnd, NULL, FALSE); 
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
+        LPARAM lParam) {
   switch (uMsg) {
     case WM_CREATE:
       printf("Setting up shared memory\n"); fflush(stdout);
@@ -104,7 +105,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
   return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nShowCmd) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR,
+        int nShowCmd) {
   mhdc = CreateCompatibleDC(NULL);
   RECT workArea;
   SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
@@ -115,7 +117,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nShowCmd) {
   DEVMODE dm = { 0 };
   dm.dmSize = sizeof(dm);
   for (int i = 0; EnumDisplaySettings(NULL, i, &dm); ++i) {
-    if (dm.dmPelsWidth > Hw || (dm.dmPelsWidth == Hw && dm.dmPelsHeight > Hh)) {
+    if (dm.dmPelsWidth > Hw ||
+            (dm.dmPelsWidth == Hw && dm.dmPelsHeight > Hh)) {
       Hw = dm.dmPelsWidth;
       Hh = dm.dmPelsHeight;
     }
@@ -127,8 +130,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nShowCmd) {
   wc.lpszClassName = L"Main Window";
   wc.hCursor = LoadCursor(NULL, IDC_ARROW);
   RegisterClass(&wc);
-  hwnd = CreateWindowEx(0, wc.lpszClassName, L"Test GUI - Title Bar Text",
-          WS_OVERLAPPEDWINDOW, 480, 270, 960, 540, NULL, NULL, hInstance, NULL);
+  hwnd = CreateWindowEx(0, wc.lpszClassName,
+          L"Test GUI - Title Bar Text", WS_OVERLAPPEDWINDOW,
+          480, 270, 960, 540, NULL, NULL, hInstance, NULL);
   if (hwnd == NULL) return 0;
   ShowWindow(hwnd, nShowCmd);
   MSG msg = {};
