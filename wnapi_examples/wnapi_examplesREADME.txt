@@ -2,8 +2,8 @@ Notes about WinAPI cpp apps: -                      [251227]
 
 In Windows OS with MSYS2 / MinGW  installed, allows me to develop in a
 familiar Linux environment, where I use the msys2 terminals with vim and
-compile g++ in the usual way. No need to use Visual Studio. I have the most
-basic toolchain installed at present.
+compile g++ in the usual way. No need to use Visual Studio. I have the
+most basic toolchain installed at present.
 
 $ pacman -Qe
 base 2022.06-1
@@ -31,10 +31,11 @@ wnhblock() {
 
                      * * * * * # # # # || # # # # * * * * * 
 
-Example of a vim color file, where you can set the colors how you want them.
-This example honors the background color you have set for your msys2 terminal
-(in my case a very dark blue). In this directory: -  /usr/share/vim/vim91/colors
-(you will also need to add   colo leon  near the end of your   .vimrc   file)
+Example of a vim color file, where you can set the colors how you want
+them. This example honors the background color you have set for your
+msys2 terminal (in my case a very dark blue). In this directory: -
+/usr/share/vim/vim91/colors  (you will also need to add   colo leon
+near the end of your   .vimrc   file).
 
 " leon.vim | 
 " Vim Test - copied from default.vim and modified
