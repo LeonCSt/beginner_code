@@ -56,7 +56,6 @@ void resizeDraw() {
   bufW = Ww; bufH = Wh;
               //Section: Direct pixel drawing
   int i, j;
-  unsigned c = 0xffaaaa66;
   j = bufW * bufH;
   for (i = 0; i < j; i++) p[i] = 0xff000022;
               //Section: Selecting bitmap into memory DC
