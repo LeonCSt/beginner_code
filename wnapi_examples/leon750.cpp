@@ -2,9 +2,9 @@
       [Ctrl] [C]  to cut      [Ctrl] [V]  to paste
       hold[Ctrl] [C]then[V]  to copy
         Textbox starts out empty so you have to copy
-	from somewhere else then paste in to get started.
+        from somewhere else then paste in to get started.
         Example -- copy --> "Utf16 encoding L♡VE, j☺y, Pe☮ce."
-	(In gvim it is [Shift] ['][=]  then  [Y] to copy to clipboard.)
+        (In gvim it is [Shift] ['][=]  then  [Y] to copy to clipboard.)
       Use mouse to highlight or place caret in text.
         (Not implemented: Keyboard keys to highlight or move caret.)
          [Q] or [ESC] or  Alt F4  or mouse click [X] to close
@@ -51,7 +51,7 @@ void text_run(int X, int Y, int pos, int end) {
     }
     else {
       if (doc[pos + 1] == 9 || pos == end - 1) {
-	GetTextExtentPoint32(
+        GetTextExtentPoint32(
                 mhdc, &doc[histpos], pos - histpos + 1, &sz);
         TextOut(mhdc, X, Y, &doc[histpos], pos - histpos + 1);
         //ExtTextOut(mhdc, X, Y, ETO_IGNORELANGUAGE, nullptr,
