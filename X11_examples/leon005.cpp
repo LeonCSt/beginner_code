@@ -127,10 +127,10 @@ int main() {
       case Expose:
         f[1] = true; break;
       case ConfigureNotify:
-	xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
-	cfgW = xcfg->width; cfgH = xcfg->height;
-	if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
-	break;
+        xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
+        cfgW = xcfg->width; cfgH = xcfg->height;
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
+        break;
       case ClientMessage:
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
                 f[0] = false;
