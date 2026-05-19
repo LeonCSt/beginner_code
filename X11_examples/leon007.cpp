@@ -10,9 +10,7 @@
 #include <sys/shm.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <math.h>
 #include <stdio.h>
-#include <string>
 using namespace std;
 
 Display *dis;
@@ -28,7 +26,7 @@ int cfgW, cfgH;           // notified configuration W/H
 int txthght, mX, mY;
 unsigned char *b;         // bytes
 unsigned *p;              // pixels
-bool redraw, loop = true;
+bool redraw, loop;
 unsigned char gct[256];   // gamma correction table
 
 void microview() {
@@ -60,10 +58,10 @@ void microview() {
   redraw = true;
 }
 
-void draw_glyph(unsigned *m, int bufW, int bufH, int X, int Y,
+void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
         unsigned fg, unsigned bg) {
-  if (Y < 0 || Y > bufH - face->glyph->bitmap.rows
-          || X < 0 || X > bufW - face->glyph->bitmap.width) return;
+  if (Y < 0 || Y > bfH - face->glyph->bitmap.rows
+          || X < 0 || X > bfW - face->glyph->bitmap.width) return;
   if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *b = &face->glyph->bitmap.buffer[0];
@@ -79,7 +77,7 @@ void draw_glyph(unsigned *m, int bufW, int bufH, int X, int Y,
     for (l = X; l < i; l++) {
       if (b[k] == 0) {}
       else if (b[k] == 255) {
-        m[Y * bufW + l] = fg;
+        m[Y * bfW + l] = fg;
       }
       else {
         d = 0xff000000;
@@ -90,18 +88,18 @@ void draw_glyph(unsigned *m, int bufW, int bufH, int X, int Y,
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        m[Y * bufW + l] = d;
+        m[Y * bfW + l] = d;
       }
       k++;
     }
   }
 }
 
-void text_run(unsigned *m, int bufW, int bufH, int X, int Y,
+void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
         unsigned char *str, int length, unsigned fg) {
   int pos = 0, num;
   unsigned u, gi, bg;
-  if (X > bufW - 50 || X < 0 || Y > bufH - 10 || Y < 30) return;
+  if (X > bfW - 50 || X < 0 || Y > bfH - 10 || Y < 30) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -128,13 +126,13 @@ void text_run(unsigned *m, int bufW, int bufH, int X, int Y,
     if (u == 0) break;
     else if (u == 10) {
       X = 30; Y += txthght + 5;
-      if (Y > bufH - 10) break;
+      if (Y > bfH - 10) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bufW - 50) {
+      if (X > bfW - 50) {
         X = 30; Y += txthght + 5;
-        if (Y > bufH - 10) break;
+        if (Y > bfH - 10) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -146,13 +144,13 @@ void text_run(unsigned *m, int bufW, int bufH, int X, int Y,
       if (face->glyph->bitmap.width != 0) {
         bg = p[(Y - (txthght / 3)) * bufW +
                 X + ((face->glyph->advance.x >> 6) / 2)];
-        draw_glyph(m, bufW, bufH, face->glyph->bitmap_left + X,
+        draw_glyph(m, bfW, bfH, face->glyph->bitmap_left + X,
                 Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bufW - 50) {
+      if (X > bfW - 50) {
         X = 30; Y += txthght + 5;
-        if (Y > bufH - 10) break;
+        if (Y > bfH - 10) break;
       }
     }
     pos += num;
@@ -280,8 +278,7 @@ void init() {
   XSetWMProperties(dis, win, &nm, &icnm, NULL, 0, &sh, &hnts, NULL);
                   //Section: Set up shared memory
   shminfo.readOnly = False;
-  shminfo.shmid = shmget(IPC_PRIVATE, waW * waH * 4,
-          IPC_CREAT | 0777);
+  shminfo.shmid = shmget(IPC_PRIVATE, waW * waH * 4, IPC_CREAT | 0777);
   shminfo.shmaddr = reinterpret_cast<char*>(shmat(shminfo.shmid, 0, 0));
   b = reinterpret_cast<unsigned char*>(shminfo.shmaddr);
   p = reinterpret_cast<unsigned*>(shminfo.shmaddr);
