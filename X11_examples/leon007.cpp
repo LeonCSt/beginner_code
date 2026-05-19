@@ -202,10 +202,8 @@ void resize_draw() {
   if (pxmp) XFreePixmap(dis, pxmp);
   pxmp = XShmCreatePixmap(dis, win, shminfo.shmaddr, &shminfo,
           bufW, bufH, 24);
-  unsigned d, c = 0xffaaaa66;
-  int i, j, l, m, n, o;
-  int k = (bufH / 2) * bufW + (bufW / 2);
-  double r;
+  unsigned c = 0xffaaaa66;
+  int i, j, m, n;
   j = bufW * bufH;
   for (i = 0; i < j; i++) p[i] = 0xff000033;
                 //Section: Gradient
