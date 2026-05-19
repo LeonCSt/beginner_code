@@ -1,7 +1,7 @@
 /*  leon005.cpp:  Window redraws when resized,
             using a shared memory buffer and XShmCreatePixmap(),
             to send window updates using XCopyArea().
-    g++ leon005.cpp -o leon -lX11 -lXext                      [260511]  */
+    g++ leon005.cpp -o leon -lX11 -lXext                      [260514]  */
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -10,7 +10,6 @@
 #include <sys/shm.h>
 #include <math.h>
 #include <stdio.h>
-#include <string>
 using namespace std;
 
 Display *dis;
