@@ -64,7 +64,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
           || X < 0 || X > bfW - face->glyph->bitmap.width) return;
   if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
-  unsigned char *b = &face->glyph->bitmap.buffer[0];
+  unsigned char *g = &face->glyph->bitmap.buffer[0];
   unsigned d;
   int i, j, k = 0, l, o;
   double r;
@@ -75,13 +75,13 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
     for (l = X; l < i; l++) {
-      if (b[k] == 0) {}
-      else if (b[k] == 255) {
+      if (g[k] == 0) {}
+      else if (g[k] == 255) {
         m[Y * bfW + l] = fg;
       }
       else {
         d = 0xff000000;
-        r = gct[b[k]] / 255.0;
+        r = gct[g[k]] / 255.0;
         o = r * fR + (1 - r) * bR + 0.5;
         d += o << 16;
         o = r * fG + (1 - r) * bG + 0.5;
@@ -99,7 +99,7 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
         unsigned char *str, int length, unsigned fg) {
   int pos = 0, num;
   unsigned u, gi, bg;
-  if (X > bfW - 50 || X < 0 || Y > bfH - offset || Y < offset) return;
+  if (X > bfW - 50 || X < 0 || Y > bfH - mv || Y < offset) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
