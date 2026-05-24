@@ -1,4 +1,4 @@
-Notes about leon.h, leon_main.cpp and leon_dialog.cpp
+Notes about leon060.h, leon061.cpp and leon062.cpp
 
 I wanted a separate cpp file to handle all dialog requirements.
 A typical application may need 10 different dialogs, and all these
