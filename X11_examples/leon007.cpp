@@ -1,5 +1,5 @@
 /*  leon007.cpp:  Text rendering with FreeType2
-            
+             [Q]  or  [Esc]  to exit.
     g++ -I/usr/include/freetype2 leon007.cpp -o leon -lX11 -lXext -lfreetype
                                                                [260518]  */
 
@@ -32,12 +32,12 @@ unsigned char gct[256];   // gamma correction table
 void microview() {
   redraw = false;
   int src, dst, end, mvx, mvy;
-  int i, j, k, l, m;
+  int i, j, k, m, n;
   src = (mY - 10) * bufW + mX - 8;
   mvx = (bufW - 192) / 2; mvy = bufH - 240;
   dst = mvy * bufW + mvx;
   end = bufW * bufH;
-  l = 0;
+  n = 0;
   while (dst < end) {
     i = dst; j = dst + 192; k = 0; m = src;
     while (i < j) {
@@ -47,11 +47,11 @@ void microview() {
       }
       i++; k++;	    
     }
-    if (l % 12 == 10) {
-      dst += bufW; l++;
+    if (n % 12 == 10) {
+      dst += bufW; n++;
       src += bufW;
     }
-    dst += bufW; l++;
+    dst += bufW; n++;
   }
   XCopyArea(dis, pxmp, win, gc, mvx, mvy, 192, 240, mvx, mvy);
   XFlush(dis);
@@ -66,7 +66,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *g = &face->glyph->bitmap.buffer[0];
   unsigned d;
-  int i, j, k = 0, l, o;
+  int i, j, k = 0, n, o;
   double r;
   fR = ((fg & 0xff0000) >> 16); fG = ((fg & 0xff00) >> 8);
   fB = (fg & 0xff); bR = ((bg & 0xff0000) >> 16);
@@ -74,10 +74,10 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   j = Y + face->glyph->bitmap.rows;
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
-    for (l = X; l < i; l++) {
+    for (n = X; n < i; n++) {
       if (g[k] == 0) {}
       else if (g[k] == 255) {
-        m[Y * bfW + l] = fg;
+        m[Y * bfW + n] = fg;
       }
       else {
         d = 0xff000000;
@@ -88,7 +88,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        m[Y * bfW + l] = d;
+        m[Y * bfW + n] = d;
       }
       k++;
     }
@@ -290,7 +290,7 @@ void init() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); loop = false; return;}
   printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 36;
+  txthght = 28; // <-- you can alter      range 10 -> 50
   FT_Set_Pixel_Sizes(face, 0, txthght);
   i = txthght * face->ascender / 1152 + 1;
   printf("ascender = %d\n", i);
