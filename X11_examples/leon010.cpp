@@ -97,9 +97,12 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
 
 void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
         unsigned char *str, int length, unsigned fg) {
-  int pos = 0, num;
+  int pos = 0, num, i, j, k;
   unsigned u, gi, bg;
-  if (X > bfW - 50 || X < 0 || Y > bfH - mv || Y < offset) return;
+  i = txthght * face->ascender / 1152 + 1;
+  j = txthght * face->descender / -1152 + 1;
+  k = txthght * 0.63;
+  if (X > bfW - k || X < 0 || Y > bfH - j || Y < i) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -125,14 +128,14 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
     }
     if (u == 0) break; 
     else if (u == 10) {
-      X = 30; Y += txthght + 5;
-      if (Y > bfH - 10) break;
+      X = 0; Y += txthght + 5;
+      if (Y > bfH - j) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bfW - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > bfH - 10) break;
+      if (X > bfW - k) {
+        X = 0; Y += txthght * 1.2;
+        if (Y > bfH - j) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -142,16 +145,15 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
       gi = FT_Get_Char_Index(face, u);
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
-        bg = p[(Y - (txthght / 3)) * bfW +
+        bg = m[(Y - (txthght / 3)) * bfW +
                 X + ((face->glyph->advance.x >> 6) / 2)];
         draw_glyph(m, bfW, bfH, face->glyph->bitmap_left + X,
                 Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bfW - 10) {
-        //X = 30; Y += txthght + 5;
-        //if (Y > bfH - 10) break;
-	break;
+      if (X > bfW - k) {
+        X = 0; Y += txthght * 1.2;
+        if (Y > bfH - j) break;
       }
     }
     pos += num;

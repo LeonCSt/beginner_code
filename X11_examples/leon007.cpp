@@ -64,7 +64,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
           || X < 0 || X > bfW - face->glyph->bitmap.width) return;
   if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
-  unsigned char *b = &face->glyph->bitmap.buffer[0];
+  unsigned char *g = &face->glyph->bitmap.buffer[0];
   unsigned d;
   int i, j, k = 0, l, o;
   double r;
@@ -75,13 +75,13 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
     for (l = X; l < i; l++) {
-      if (b[k] == 0) {}
-      else if (b[k] == 255) {
+      if (g[k] == 0) {}
+      else if (g[k] == 255) {
         m[Y * bfW + l] = fg;
       }
       else {
         d = 0xff000000;
-        r = gct[b[k]] / 255.0;
+        r = gct[g[k]] / 255.0;
         o = r * fR + (1 - r) * bR + 0.5;
         d += o << 16;
         o = r * fG + (1 - r) * bG + 0.5;
@@ -97,9 +97,12 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
 
 void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
         unsigned char *str, int length, unsigned fg) {
-  int pos = 0, num;
+  int pos = 0, num, i, j, k;
   unsigned u, gi, bg;
-  if (X > bfW - 50 || X < 0 || Y > bfH - 10 || Y < 30) return;
+  i = txthght * face->ascender / 1152 + 1;
+  j = txthght * face->descender / -1152 + 1;
+  k = txthght * 0.63;
+  if (X > bfW - k || X < 0 || Y > bfH - j || Y < i) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -123,16 +126,16 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
     else {
       pos++; continue;
     }
-    if (u == 0) break;
+    if (u == 0) break; 
     else if (u == 10) {
-      X = 30; Y += txthght + 5;
-      if (Y > bfH - 10) break;
+      X = 0; Y += txthght + 5;
+      if (Y > bfH - j) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bfW - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > bfH - 10) break;
+      if (X > bfW - k) {
+        X = 0; Y += txthght * 1.2;
+        if (Y > bfH - j) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -142,15 +145,15 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
       gi = FT_Get_Char_Index(face, u);
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
-        bg = p[(Y - (txthght / 3)) * bufW +
+        bg = m[(Y - (txthght / 3)) * bfW +
                 X + ((face->glyph->advance.x >> 6) / 2)];
         draw_glyph(m, bfW, bfH, face->glyph->bitmap_left + X,
                 Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bfW - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > bfH - 10) break;
+      if (X > bfW - k) {
+        X = 0; Y += txthght * 1.2;
+        if (Y > bfH - j) break;
       }
     }
     pos += num;
@@ -242,6 +245,7 @@ void paint() {
 }
 
 void init() {
+  int i, j;
   dis = XOpenDisplay(0);
   waW = XDisplayWidth(dis, 0); waH = XDisplayHeight(dis, 0);
                   //Section: Prep Window
@@ -286,15 +290,19 @@ void init() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); loop = false; return;}
   printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
+  txthght = 36;
   FT_Set_Pixel_Sizes(face, 0, txthght);
+  i = txthght * face->ascender / 1152 + 1;
+  printf("ascender = %d\n", i);
+  j = txthght * face->descender / -1152 + 1;
+  printf("descender = %d\n", j);
                   //Section: Set up gamma correction table
   double c, d;
   unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
                         23, 27, 32, 39}; //curve
-  int j = 0;
+  j = 0;
   d = 255.5;
-  for (int i = 255; i > -1; i--) {
+  for (i = 255; i > -1; i--) {
     gct[i] = d;
     if (i % 16 == 15) {
        c = cv[j] / 16.0;
