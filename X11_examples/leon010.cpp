@@ -66,7 +66,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *g = &face->glyph->bitmap.buffer[0];
   unsigned d;
-  int i, j, k = 0, l, o;
+  int i, j, k = 0, n, o;
   double r;
   fR = ((fg & 0xff0000) >> 16); fG = ((fg & 0xff00) >> 8);
   fB = (fg & 0xff); bR = ((bg & 0xff0000) >> 16);
@@ -74,10 +74,10 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
   j = Y + face->glyph->bitmap.rows;
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
-    for (l = X; l < i; l++) {
+    for (n = X; n < i; n++) {
       if (g[k] == 0) {}
       else if (g[k] == 255) {
-        m[Y * bfW + l] = fg;
+        m[Y * bfW + n] = fg;
       }
       else {
         d = 0xff000000;
@@ -88,7 +88,7 @@ void draw_glyph(unsigned *m, int bfW, int bfH, int X, int Y,
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        m[Y * bfW + l] = d;
+        m[Y * bfW + n] = d;
       }
       k++;
     }
@@ -211,7 +211,7 @@ void resize_draw() {
   rrec.x = txthght * 7; rrec.y = txthght * 3.5;
   trec.x = txthght * 3; trec.y = txthght * 1.2;
   fill_rectangle(p, bufW, bufH,
-          rrec.x, rrec.y, rrec.width, rrec.height, 0xff333322);
+          rrec.x, rrec.y, rrec.width, rrec.height, 0xff444444);
   text_run(p, bufW, bufH, trec.x, trec.y + offset, txt, 9, 0xffaaaa66);
   rhst = rrec; thst = trec;
 }
@@ -242,7 +242,7 @@ void draw_animat() {
   }
   if (rdrw) {
     fill_rectangle(p, bufW, bufH,
-            rrec.x, rrec.y, rrec.width, rrec.height, 0xff333322);
+            rrec.x, rrec.y, rrec.width, rrec.height, 0xff444444);
     rct.push_back(rrec);
   } 
   if (tdrw) {
@@ -349,7 +349,7 @@ void init() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); loop = false; return;}
   //printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
+  txthght = 36;  // <--  you can alter     range 10 -> 50
   FT_Set_Pixel_Sizes(face, 0, txthght);
                   //Section: Set up gamma correction table
   double c, d;
