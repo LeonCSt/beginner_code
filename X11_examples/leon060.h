@@ -38,7 +38,7 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
             int X, Y           | start position
             unsigned char *str | pointer to start in utf8 byte array
             int length         | length of encoding to read
-            unsigned fg, bg    | foreground and background colors   */
+            unsigned fg        | foreground color   */
 
 void fill_rectangle(unsigned *m, int bfW, int bfH, int X, int Y,
         int width, int height, unsigned fg);
