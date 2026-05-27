@@ -37,7 +37,7 @@ void draw_rectangle(unsigned *m, int bfW, int bfH, int X, int Y,
         int width, int height, unsigned fg) {
   if (X < 0 || X > bfW - width
             || Y < 0 || Y > bfH - height) return;
-  int g, h, j, i, k;
+  int g, h, i, k;
   k = Y * bfW + X; h = (Y + height - 1) * bfW + X;
   for (i = 0; i < width; i++) {
     m[k] = fg; m[h] = fg;
