@@ -262,7 +262,8 @@ void draw_textbox(bool refresh) {
         fill_rectangle(p, bffwdth, bffhght, tabW, j - ln_o,
                 caretx - tabW, lineH, fg);
         k = caret - ls[i];
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, bg, fg);          k = ls[i + 1] - caret;
+        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, bg, fg);
+        k = ls[i + 1] - caret;
         if (doc[ls[i + 1] - 1] == 10) k--;
         text_run(p, bffwdth, bffhght, caretx, j, &doc[caret],
                 k, fg, bg);      }
@@ -592,7 +593,6 @@ void receive_clpbrd() {
     clp_size = j;
   }
                 //Section: Inserting the clip
-  printf("inserting\n");
   doc.resize(doclength + clp_size + 1);
   for (i = doclength; i >= caret; i--) doc[i + clp_size] = doc[i];
   j = caret;
