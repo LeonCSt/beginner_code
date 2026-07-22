@@ -8,7 +8,6 @@
                                                              [260524]  */
 
 #include "leon060.h"
-using namespace std;
 
 Window dlg;
 Pixmap dxmp;
