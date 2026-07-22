@@ -11,7 +11,6 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <stdio.h>
-using namespace std;
 
 Display *dis;
 GC gc;
@@ -26,7 +25,7 @@ int cfgW, cfgH;           // notified configuration W/H
 int txthght, mX, mY;
 unsigned char *b;         // bytes
 unsigned *p;              // pixels
-bool redraw, loop;
+bool redraw = true, loop;
 unsigned char gct[256];   // gamma correction table
 
 void microview() {
@@ -311,7 +310,6 @@ void init() {
     d -= c;
   }
                   //Finish
-  resize_draw();
   XMapWindow(dis, win);
   loop = true;
 }
@@ -331,9 +329,9 @@ int main() {
       case KeyRelease:
         XLookupString(&evnt.xkey, &text, 1, &key, 0);
         if ((key == XK_Escape) || (key == XK_q)) loop = false;
-        //else printf("You pressed the %c key!\n",  text);
         break;
       case Expose:
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         pf = true; break;
       case MotionNotify:
         mX = evnt.xbutton.x; mY = evnt.xbutton.y;
@@ -343,7 +341,6 @@ int main() {
       case ConfigureNotify:
         xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
         cfgW = xcfg->width; cfgH = xcfg->height;
-        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         break;
       case ClientMessage:
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
