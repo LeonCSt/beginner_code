@@ -6,7 +6,6 @@
                                                             [260524]  */
 
 #include "leon060.h"
-using namespace std;
 
 // defining extern variables declared in leon060.h
 Display *dis;
@@ -30,7 +29,7 @@ XSizeHints sh;
 XRectangle rct, btn;
 unsigned char gct[256];   // gamma correction table
 unsigned char prompt[] = "Click to open pop-up dialog";
-bool redraw, loop, bf;   
+bool redraw = true, loop, bf;   
 
 
 void draw_rectangle(unsigned *m, int bfW, int bfH, int X, int Y,
@@ -329,7 +328,6 @@ void init() {
   btn.width = txthght * 14; btn.height = txthght * 2.5;
                   //Finish
   hndcursor = XCreateFontCursor(dis, XC_hand2);
-  resize_draw();
   XMapWindow(dis, win);
   loop = true;
 }
@@ -370,12 +368,11 @@ int main() {
         }
         break;
       case Expose:
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         pf = true; break;
       case ConfigureNotify:
         xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
         cfgW = xcfg->width; cfgH = xcfg->height;
-        if (redraw && (cfgW != bufW || cfgH != bufH))
-                { resize_draw(); pf = true; }
         break;
       case DestroyNotify:
         sh.max_width = waW; sh.max_height = waH; 
