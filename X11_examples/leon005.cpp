@@ -10,7 +10,6 @@
 #include <sys/shm.h>
 #include <math.h>
 #include <stdio.h>
-using namespace std;
 
 Display *dis;
 GC gc;
@@ -22,16 +21,16 @@ int waW, waH, bufW, bufH; // working area width/height   and  buffer W/H
 int cfgW, cfgH;           // notified configuration W/H
 char *b;                  // bytes
 unsigned *p;              // pixels
-bool redraw;
+bool redraw = true;
 
 void resize_draw() {
   redraw = false;
-  bufW = cfgW; bufH =cfgH;
+  bufW = cfgW; bufH = cfgH;
   if (pxmp) XFreePixmap(dis, pxmp);
   pxmp = XShmCreatePixmap(dis, win, shminfo.shmaddr, &shminfo,
           bufW, bufH, 24);
   unsigned d, c = 0xffaaaa66;
-  int i, j, l, m, n, o;
+  int i, j, m, n, o;
   int k = (bufH / 2) * bufW + (bufW / 2);
   double r;
   j = bufW * bufH;
@@ -72,7 +71,7 @@ void init() {
   p = reinterpret_cast<unsigned*>(shminfo.shmaddr);
   XShmAttach(dis, &shminfo);
                   //Section: Prep Window
-  cfgW = 960; cfgH = 540;
+  cfgW = 800; cfgH = 500;
   gc = XDefaultGC(dis, DefaultScreen(dis));
   int attriMask = CWBackPixel | CWWinGravity | CWEventMask;
   XSetWindowAttributes winAttr;
@@ -87,12 +86,11 @@ void init() {
           DefaultVisual(dis, 0), attriMask, &winAttr);
   WM_DELETE_WINDOW = XInternAtom(dis, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(dis, win, &WM_DELETE_WINDOW, 1);
-  resize_draw();
   XSizeHints sh; XWMHints hnts; XTextProperty nm, icnm;
   sh.flags = PPosition | PSize | PMinSize | PMaxSize | PWinGravity;
   sh.x = left; sh.y = top; sh.width = cfgW; sh.height = cfgH;
   sh.max_width = waW; sh.max_height = waH; 
-  sh.min_width = 320; sh.min_height = 180;
+  sh.min_width = 320; sh.min_height = 200;
   sh.win_gravity = CenterGravity;
   hnts.flags = 1; hnts.input = true;
   char snm[] = "Test GUI(Title Bar Text)";
@@ -109,33 +107,32 @@ int main() {
   init();
   KeySym key;
   char text;
-  bool f[2]; // f[0] event while loop keeper, f[1] paint flag
+  bool loop = true, pf;
   int mx, my;
-  f[0] = true;
+  loop = true;
   XEvent evnt;
   XConfigureEvent *xcfg;
-  while(f[0]) {
-    f[1] = false;
+  while(loop) {
+    pf = false;
     XNextEvent(dis, &evnt);
     switch(evnt.type) {
       case KeyRelease:
         XLookupString(&evnt.xkey, &text, 1, &key, 0);
-        if ((key == XK_Escape) || (key == XK_q)) f[0] = false;
-        //else printf("You pressed the %c key!\n",  text);
+        if ((key == XK_Escape) || (key == XK_q)) loop = false;
         break;
       case Expose:
-        f[1] = true; break;
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
+        pf = true; break;
       case ConfigureNotify:
         xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
         cfgW = xcfg->width; cfgH = xcfg->height;
-        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         break;
       case ClientMessage:
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
-                f[0] = false;
+                loop = false;
         break;
     }
-    if (f[1]) paint();
+    if (pf) paint();
   }
   XShmDetach(dis, &shminfo);
   shmdt(shminfo.shmaddr);
