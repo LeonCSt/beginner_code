@@ -48,7 +48,7 @@ int waW, waH, cfgW, cfgH, bufW, bufH, txthght, tabW;
 int doclength, caret, nlines, enddoc, mX, mY, lineH, ln_o;
 int caretx, carety, histcaret, histcaretx, histcarety;
 int operation; // 0 is none,  1 is gettargets(), 2 is getclipboard()
-bool loop, pf, redraw, txtbxfocus, lftctl, cursorcaret, txtbxactive;
+bool loop, pf, redraw = true, txtbxfocus, lftctl, cursorcaret, txtbxactive;
 bool blinker, blinkeractive, mousedown, highlight, select_own;
 unsigned char gct[256]; // gamma correction table
 unsigned c[] = {0xff000033, 0xff111144, 0xff222255, 0xffaaaa66, 0xffcccc88};
@@ -635,7 +635,6 @@ void init() {
   mgrct.width = tbrct.width + j * 2;
   mgrct.height = tbrct.height + j * 2;
                 //Finish
-  resize_draw();
   XMapWindow(dis, win);
   loop = true;
 }
@@ -751,12 +750,11 @@ int main() {
         }
         break;
       case Expose:
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         pf = true; break;
       case ConfigureNotify:
         xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
         cfgW = xcfg->width; cfgH = xcfg->height;
-        if (redraw && (cfgW != bufW || cfgH != bufH))
-                { resize_draw(); pf = true; }
         break;
       case ClientMessage:
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
