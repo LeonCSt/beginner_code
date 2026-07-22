@@ -29,7 +29,7 @@ int cfgW, cfgH;           // notified configuration W/H
 int txthght, mX, mY, offset, mv;
 unsigned char *b;         // bytes
 unsigned *p;              // pixels
-bool redraw, loop;
+bool redraw = true, loop;
 bool kydwn, msdwn, rdrw, tdrw;
 bool ky[4]; // AWSD key flags
 unsigned char gct[256];   // gamma correction table
@@ -239,8 +239,6 @@ void draw_animat() {
             rhst.x, rhst.y, rhst.width, rhst.height, 0xff000033);
     rct.push_back(rhst);
     rhst = rrec;
-  }
-  if (rdrw) {
     fill_rectangle(p, bufW, bufH,
             rrec.x, rrec.y, rrec.width, rrec.height, 0xff444444);
     rct.push_back(rrec);
@@ -371,13 +369,13 @@ void init() {
   offset = txthght * 0.87; mv = txthght * 0.25;
   rct.reserve(5);
                   //Finish
-  resize_draw();
   XMapWindow(dis, win);
   loop = true;
 }
 
 int main() {
   init();
+  if (!loop) return 1;
   thread t1(animate); t1.detach();
   KeySym key;
   char text;
@@ -409,7 +407,6 @@ int main() {
           if (kydwn && !ky[0] && !ky[1] && !ky[2] && !ky[3]) kydwn = false;
         }
         else if ((key == XK_Escape) || (key == XK_q)) loop = false;
-        //else printf("You pressed the %c key!\n",  text);
         break;
       case ButtonPress:
         if (evnt.xbutton.button == 1) msdwn = true;
@@ -418,6 +415,7 @@ int main() {
         if (evnt.xbutton.button == 1) msdwn = false;
         break;
       case Expose:
+        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         pf = true; break;
       case MotionNotify:
         mX = evnt.xbutton.x; mY = evnt.xbutton.y;
@@ -425,7 +423,6 @@ int main() {
       case ConfigureNotify:
         xcfg = reinterpret_cast<XConfigureEvent*>(&evnt);
         cfgW = xcfg->width; cfgH = xcfg->height;
-        if (redraw && (cfgW != bufW || cfgH != bufH)) resize_draw();
         break;
       case ClientMessage:
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
@@ -443,4 +440,5 @@ int main() {
   shmdt(shminfo.shmaddr);
   shmctl(shminfo.shmid, IPC_RMID, 0);
   XDestroyWindow(dis, win);
+  return 0;
 }
