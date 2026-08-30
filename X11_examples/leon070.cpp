@@ -44,12 +44,14 @@ vector<unsigned char> doc = {0};
 vector<unsigned char> clip = {0};
 vector<unsigned> ls = {0}; // ls[]  list of each lines start pos within doc[]
 vector<unsigned short> ll = {0}; // ll[]  list of pixel length of each line
+atomic<int> caret;
 int waW, waH, cfgW, cfgH, bufW, bufH, txthght, tabW; 
-int doclength, caret, nlines, enddoc, mX, mY, lineH, ln_o;
+int doclength, nlines, enddoc, mX, mY, lineH, ln_o;
 int caretx, carety, histcaret, histcaretx, histcarety;
 int operation; // 0 is none,  1 is gettargets(), 2 is getclipboard()
-bool loop, pf, redraw = true, txtbxfocus, lftctl, cursorcaret, txtbxactive;
-bool blinker, blinkeractive, mousedown, highlight, select_own;
+atomic<bool> blinkeractive, redraw = true;
+bool loop, pf, txtbxfocus, lftctl, cursorcaret, txtbxactive;
+bool blinker, mousedown, highlight, select_own;
 unsigned char gct[256]; // gamma correction table
 unsigned c[] = {0xff000033, 0xff111144, 0xff222255, 0xffaaaa66, 0xffcccc88};
 
@@ -204,8 +206,11 @@ void gettargets() {
           &type, &di, &natoms, &dul, &atom_ret);
   printf("You are offering. Target these types: -\n");
   targets = (Atom *)atom_ret;
+  char *name;
   for (int i = 0; i < natoms; i++) {
-    printf("    '%s'\n", XGetAtomName(dis, targets[i]));
+    name = XGetAtomName(dis, targets[i]);
+    printf("    '%s'\n", name);
+    XFree(name);   
   }
   XDeleteProperty(dis, sel_owner_win, gdk_sel);
 }
@@ -573,20 +578,17 @@ void init() {
           DefaultVisual(dis, 0), attriMask, &winAttr);
   WM_DELETE_WINDOW = XInternAtom(dis, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(dis, win, &WM_DELETE_WINDOW, 1);
-  XSizeHints sh; XWMHints hnts; XTextProperty nm, icnm;
+  XSizeHints sh; XWMHints hnts;
   sh.flags = PPosition | PSize | PMinSize | PMaxSize | PWinGravity;
   sh.x = left; sh.y = top; sh.width = cfgW; sh.height = cfgH;
   sh.max_width = waW; sh.max_height = waH; 
   sh.min_width = txthght * 28; sh.min_height = txthght * 18;
   sh.win_gravity = CenterGravity;
   hnts.flags = 1; hnts.input = true;
-  char snm[] = "Test GUI(Title Bar Text)";
-  char *psnm = snm;
-  XStringListToTextProperty(&psnm, 1, &nm);
-  char sicnm[] = "Test GUI(Icon Text)";
-  char *psicnm = sicnm;
-  XStringListToTextProperty(&psicnm, 1, &icnm);
-  XSetWMProperties(dis, win, &nm, &icnm, NULL, 0, &sh, &hnts, NULL);
+  XStoreName(dis, win, "Test GUI(Title Bar Text)");
+  XSetIconName(dis, win, "Test GUI(Icon Text)");
+  XSetWMNormalHints(dis, win, &sh);
+  XSetWMHints(dis, win, &hnts);
                   //Section: Set up shared memory
   shminfo.readOnly = False;
   shminfo.shmid = shmget(IPC_PRIVATE, waW * waH * 4 + txthght * txthght * 648,
@@ -669,7 +671,10 @@ int main() {
         break;
       case KeyRelease:
         XLookupString(&evnt.xkey, &text, 1, &key, 0);
-        if (key == XK_Escape || key == XK_q) loop = false;
+        if (key == XK_Escape || key == XK_q) {
+          blinkeractive = false;
+          loop = false;
+	}
         else if (key == XK_Control_L) lftctl = false;
         else if (lftctl && key == XK_v && txtbxfocus  && !highlight) {
           if (select_own) getclipboard();
@@ -757,8 +762,10 @@ int main() {
         cfgW = xcfg->width; cfgH = xcfg->height;
         break;
       case ClientMessage:
-        if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW)
-                loop = false;
+        if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW) {
+          blinkeractive = false;
+          loop = false;
+	}
         break;
       case SelectionClear:
         printf("lost ownership\n");
@@ -778,21 +785,23 @@ int main() {
         break;
       case SelectionRequest:
         sev = (XSelectionRequestEvent*)&evnt.xselectionrequest;
+	char *name = XGetAtomName(dis, sev->property);
         if (sev->property == None) {
-          printf("Denying request '%s'\n", XGetAtomName(dis, sev->target));
+          printf("Denying request '%s'\n", name);
         }
         else if (sev->target == trgts) {
-          printf("Sending Atoms '%s'\n", XGetAtomName(dis, sev->property));
+          printf("Sending Atoms '%s'\n", name);
           XChangeProperty(dis, sev->requestor, sev->property,
                   XA_ATOM, 32, PropModeReplace, atom_ret, natoms);
         }
         else {
-          printf("Sending data '%s'\n", XGetAtomName(dis, sev->property));
+          printf("Sending data '%s'\n", name);
           XChangeProperty(dis, sev->requestor, sev->property,
                   utf8str, 8,  PropModeReplace,
                   reinterpret_cast<unsigned char*>(&clip[0]),
                   clip.size() - 1);
         }
+        XFree(name);   
         ssev.property = sev->property;
         ssev.target = sev->target;
         ssev.type = SelectionNotify;
@@ -808,6 +817,7 @@ int main() {
       paint();
     }
   }
+  this_thread::sleep_for(chrono::milliseconds(50));
   shutdown();
   return 0;
 }
