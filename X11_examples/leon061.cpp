@@ -288,14 +288,10 @@ void init() {
   sh.win_gravity = CenterGravity;
   XWMHints hnts;
   hnts.flags = 1; hnts.input = true;
-  XTextProperty nm, icnm;
-  char snm[] = "Test GUI(Title Bar Text)";
-  char *psnm = snm;
-  XStringListToTextProperty(&psnm, 1, &nm);
-  char sicnm[] = "Test GUI(Icon Text)";
-  char *psicnm = sicnm;
-  XStringListToTextProperty(&psicnm, 1, &icnm);
-  XSetWMProperties(dis, win, &nm, &icnm, NULL, 0, &sh, &hnts, NULL);
+  XStoreName(dis, win, "Test GUI(Title Bar Text)");
+  XSetIconName(dis, win, "Test GUI(Icon Text)");
+  XSetWMNormalHints(dis, win, &sh);
+  XSetWMHints(dis, win, &hnts);
                   //Section: Set up shared memory
   shminfo.readOnly = False;
   shminfo.shmid = shmget(IPC_PRIVATE, waW * waH * 4 + txthght * txthght * 648,
