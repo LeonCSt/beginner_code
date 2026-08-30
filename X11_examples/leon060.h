@@ -9,7 +9,6 @@
 #include <sys/shm.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <thread>
 #include <chrono>
 #include <stdio.h>
 
