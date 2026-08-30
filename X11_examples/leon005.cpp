@@ -86,20 +86,17 @@ void init() {
           DefaultVisual(dis, 0), attriMask, &winAttr);
   WM_DELETE_WINDOW = XInternAtom(dis, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(dis, win, &WM_DELETE_WINDOW, 1);
-  XSizeHints sh; XWMHints hnts; XTextProperty nm, icnm;
+  XSizeHints sh; XWMHints hnts;
   sh.flags = PPosition | PSize | PMinSize | PMaxSize | PWinGravity;
   sh.x = left; sh.y = top; sh.width = cfgW; sh.height = cfgH;
   sh.max_width = waW; sh.max_height = waH; 
   sh.min_width = 320; sh.min_height = 200;
   sh.win_gravity = CenterGravity;
   hnts.flags = 1; hnts.input = true;
-  char snm[] = "Test GUI(Title Bar Text)";
-  char *psnm = snm;
-  XStringListToTextProperty(&psnm, 1, &nm);
-  char sicnm[] = "Test GUI(Icon Text)";
-  char *psicnm = sicnm;
-  XStringListToTextProperty(&psicnm, 1, &icnm);
-  XSetWMProperties(dis, win, &nm, &icnm, NULL, 0, &sh, &hnts, NULL);
+  XStoreName(dis, win, "Test GUI(Title Bar Text)");
+  XSetIconName(dis, win, "Test GUI(Icon Text)");
+  XSetWMNormalHints(dis, win, &sh);
+  XSetWMHints(dis, win, &hnts);
   XMapWindow(dis, win);
 }
 
@@ -108,8 +105,6 @@ int main() {
   KeySym key;
   char text;
   bool loop = true, pf;
-  int mx, my;
-  loop = true;
   XEvent evnt;
   XConfigureEvent *xcfg;
   while(loop) {
