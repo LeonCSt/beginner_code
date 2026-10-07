@@ -29,10 +29,7 @@ using namespace std;
 Display *dis;
 GC gc;
 Window win, sel_owner_win;
-Atom WM_DELETE_WINDOW, clpbrd, utf8str, prop;
-Atom trgts, gdk_sel;
-unsigned char *atom_ret = NULL;
-unsigned long natoms;
+Atom WM_DELETE_WINDOW, clpbrd, utf8str, prop, trgts;
 XShmSegmentInfo shminfo;
 FT_Library lbrry;
 FT_Face face;
@@ -200,19 +197,25 @@ void text_run(unsigned *m, int bfW, int bfH, int X, int Y,
 void gettargets() {
   Atom type, *targets;
   int di;
-  unsigned long dul;
-  XGetWindowProperty(dis, sel_owner_win, gdk_sel, 0,
+  unsigned long natoms, dul;
+  unsigned char *atom_ret = NULL;
+  bool f = false;
+  XGetWindowProperty(dis, win, prop, 0,
           1024 * sizeof (Atom), False, XA_ATOM,
           &type, &di, &natoms, &dul, &atom_ret);
-  printf("You are offering. Target these types: -\n");
   targets = (Atom *)atom_ret;
+  operation = 3;
+  printf("You are offered these target types: -\n");
   char *name;
   for (int i = 0; i < natoms; i++) {
     name = XGetAtomName(dis, targets[i]);
     printf("    '%s'\n", name);
     XFree(name);   
+    if ( targets[i] == utf8str) f = true;
   }
-  XDeleteProperty(dis, sel_owner_win, gdk_sel);
+  if (f) XConvertSelection(dis, clpbrd, utf8str, prop, win, CurrentTime);
+  else XConvertSelection(dis, clpbrd, XA_STRING, prop, win, CurrentTime);
+  XFree(atom_ret);
 }
 
 void findcrsrpos() {
@@ -345,8 +348,8 @@ void drawtxtbx(bool refresh) {
 
 void castlines() {
   if (nlines != 0) {
-    ls.erase(ls.begin(), ls.begin() + nlines);
-    ll.erase(ll.begin(), ll.begin() + nlines);
+    ls.resize(1);
+    ll.resize(1);
     nlines = 0;
   }
   int pos = 0, num, tally = 0, space, spcpos, histpos = 0;
@@ -442,27 +445,24 @@ void castlines() {
 
 void sendtoclipboard() {
   int i, j, k = 0;
-  if (!select_own)
-          XSetSelectionOwner(dis, clpbrd, sel_owner_win, CurrentTime);
-  if (XGetSelectionOwner(dis, clpbrd) == sel_owner_win) {
-    select_own = true;
-    j = caret - histcaret;
-    clip.resize(j + 1);
-    for (i = histcaret; i < caret; i++) { clip[k] = doc[i]; k++; }
-    clip[k] = 0;
-    //printf("%.*s", j, &clip[0]); printf("\n");
-    for (i = caret; i <= doclength; i++) doc[i - j] = doc[i];
-    doclength -= j;
-    caret -= j;
-    doc.resize(doclength + 1);
-    castlines();
-    if (doclength == 0) {
-      blinkeractive = false;
-      txtbxactive = false;
-    }
-    highlight = false;
-    if (redraw) drawtxtbx(true);
+  select_own = true;
+  printf("You own the clipboard.\n");
+  j = caret - histcaret;
+  clip.resize(j + 1);
+  for (i = histcaret; i < caret; i++) { clip[k] = doc[i]; k++; }
+  clip[k] = 0;
+  //printf("%.*s", j, &clip[0]); printf("\n");
+  for (i = caret; i <= doclength; i++) doc[i - j] = doc[i];
+  doclength -= j;
+  caret -= j;
+  doc.resize(doclength + 1);
+  castlines();
+  if (doclength == 0) {
+    blinkeractive = false;
+    txtbxactive = false;
   }
+  highlight = false;
+  if (redraw) drawtxtbx(true);
 }
 
 void getclipboard() {
@@ -624,7 +624,6 @@ void init() {
   utf8str = XInternAtom(dis, "UTF8_STRING", False);
   trgts = XInternAtom(dis, "TARGETS", False);
   prop = XInternAtom(dis, "XSEL_DATA", False);
-  gdk_sel = XInternAtom(dis, "GDK_SELECTION", False);
                 //Section: Set up sizes
   FT_Load_Glyph(face, FT_Get_Char_Index(face, 48), 0);
   tabW = 8 * face->glyph->advance.x >> 6;
@@ -642,7 +641,6 @@ void init() {
 }
 
 void shutdown() {
-  XFree(atom_ret);
   XDestroyWindow(dis, sel_owner_win);
   XFreeCursor(dis, txtcursor);
   XShmDetach(dis, &shminfo);
@@ -674,24 +672,26 @@ int main() {
         if (key == XK_Escape || key == XK_q) {
           blinkeractive = false;
           loop = false;
-	}
+        }
         else if (key == XK_Control_L) lftctl = false;
-        else if (lftctl && key == XK_v && txtbxfocus  && !highlight) {
+        else if (lftctl && key == XK_v && txtbxfocus
+                && !highlight && redraw) {
           if (select_own) getclipboard();
           else {
             operation = 2;
-            XConvertSelection(dis, clpbrd, utf8str, prop, win, CurrentTime);
+            XConvertSelection(dis, clpbrd, trgts, prop, win, CurrentTime);
           }
         }
-        else if (lftctl && key == XK_c && highlight) {
+        else if (lftctl && key == XK_c && highlight && redraw) {
           operation = 1;
-          XConvertSelection(dis, clpbrd, trgts, gdk_sel,
+          XConvertSelection(dis, clpbrd, trgts, prop,
                    sel_owner_win, CurrentTime);
         }
         break;
       case ButtonPress:
         if (evnt.xbutton.button == 1) {
-          if (txtbxfocus && mY > tbrct.y && mY < tbrct.y + tbrct.height) {
+          if (txtbxfocus && mY > tbrct.y
+                  && mY < tbrct.y + tbrct.height && redraw) {
             if (doclength == 0) break;
             findcrsrpos();
             histcaret = caret;
@@ -715,6 +715,13 @@ int main() {
           else highlight = false;
           blinkeractive = true;
           thread t1(caretblinker); t1.detach();
+        }
+	else if (evnt.xbutton.button == 2 && txtbxfocus  && !highlight) {
+          if (select_own) getclipboard();
+          else {
+            operation = 2;
+            XConvertSelection(dis, clpbrd, trgts, prop, win, CurrentTime);
+          }
         }
         break;
       case MotionNotify:
@@ -765,7 +772,7 @@ int main() {
         if ((Atom) evnt.xclient.data.l[0] == WM_DELETE_WINDOW) {
           blinkeractive = false;
           loop = false;
-	}
+        }
         break;
       case SelectionClear:
         printf("lost ownership\n");
@@ -773,29 +780,40 @@ int main() {
         clip.resize(1); clip[0] = 0;
         break;
       case SelectionNotify:
-        if (evnt.xselection.selection == clpbrd
-                && evnt.xselection.property) {
-          if (operation == 1) {
-            gettargets();
-            sendtoclipboard();
-          }
-          else if (operation == 2) getclipboard();
+        if (evnt.xselection.selection == clpbrd) {
+          if (evnt.xselection.property == None && operation == 2)
+                  printf("Clipboard is empty.\n");
+          else if (operation == 2) gettargets();
+          else if (operation == 3) { getclipboard(); operation = 0; }
+          else if (operation == 1) {
+            if (!select_own) {
+              XSetSelectionOwner(dis, clpbrd, sel_owner_win, CurrentTime);
+            }
+            if (XGetSelectionOwner(dis, clpbrd) == sel_owner_win) {
+              sendtoclipboard();
+            } else printf("XGetSelectionOwner failed.");
           operation = 0;
+          }
         }
         break;
       case SelectionRequest:
         sev = (XSelectionRequestEvent*)&evnt.xselectionrequest;
-	char *name = XGetAtomName(dis, sev->property);
+        char *name = XGetAtomName(dis, sev->property);
         if (sev->property == None) {
           printf("Denying request '%s'\n", name);
         }
         else if (sev->target == trgts) {
-          printf("Sending Atoms '%s'\n", name);
+          printf("You are offering UTF8_STRING and XA_STRING | Requester: %s'\n", name);
+          Atom mytargets[] = {utf8str, XA_STRING};
           XChangeProperty(dis, sev->requestor, sev->property,
-                  XA_ATOM, 32, PropModeReplace, atom_ret, natoms);
+                  XA_ATOM, 32, PropModeReplace,
+                  reinterpret_cast<unsigned char*>(mytargets), 2);
         }
         else {
           printf("Sending data '%s'\n", name);
+          XFree(name);
+          name = XGetAtomName(dis, sev->target);  
+	  printf("Requester's target = '%s'\n", name);
           XChangeProperty(dis, sev->requestor, sev->property,
                   utf8str, 8,  PropModeReplace,
                   reinterpret_cast<unsigned char*>(&clip[0]),
