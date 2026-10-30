@@ -6,7 +6,10 @@
              see wl_examplesREADME.txt
 
     g++ -I/usr/include/freetype2 xdg-shell-protocol.cpp leon480.cpp -o leon -lwayland-client -lwayland-cursor -lfreetype
-                                                       [251102] */
+     Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                      - - - - - -   prefix with the following for debug   - - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+    g++ -fsanitize=thread -g -O1 . . .
+                                                      [251102] */
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -16,10 +19,9 @@
 #include <wayland-cursor.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <cstring>
-#include <string>
 #include <thread>
 #include <chrono>
+#include <atomic>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
 
@@ -43,28 +45,30 @@ wl_keyboard *kybrd;
 FT_Library lbrry;
 FT_Face face;
 unsigned *p; // pixel array for window
-bool xit, redraw, key_dwn, pntr_dwn;
-int hrdwrX, hrdwrY;
-int surfwidth, surfheight;
-int bffwdth, bffhght;
-int txthght, mX, mY;
-int rectX, rectY, hist_rX, hist_rY;
-int txtX, txtY, hstxtX, hstxtY;
-bool ky[4]; // arrow key flags
+atomic <bool> evloop, redraw, kydwn, msdwn;
+atomic <int> rdrw, tdrw, mX, mY;
+int monW, monH, srfW, srfH;
+int bufW, bufH, txtH;
+int rX, rY, rW, rH, rXh, rYh;
+int tX, tY, tW, tH, tXh, tYh;
+int offset, mv;
+atomic <bool> ky[4]; // AWSD key flags
+unsigned char gct[256];  // gamma correction table
+unsigned char txt[] = "Some text";
 
 void fill_rectangle(int X, int Y, int width, int height, unsigned fg) {
-  if (X < 0 || X > bffwdth - width
-            || Y < 0 || Y > bffhght - height) return;
+  if (X < 0 || X > bufW - width
+            || Y < 0 || Y > bufH - height) return;
   int m, i, j, k;
   if ((fg & 0xff000000) == 0xff000000) {
-    m = Y * bffwdth + X;
+    m = Y * bufW + X;
     j = Y + height; k = X + width;
     for (Y; Y < j; Y++) {
       for (i = X; i < k; i++) {
        p[m] = fg;
        m++;
       }
-    m += bffwdth - width;
+    m += bufW - width;
     }
   }
   else {
@@ -72,10 +76,9 @@ void fill_rectangle(int X, int Y, int width, int height, unsigned fg) {
   }
 }
 
-void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
-          unsigned char* gc) {
-  if (Y < 0 || Y > bffhght - face->glyph->bitmap.rows
-          || X < 0 || X > bffwdth - face->glyph->bitmap.width) return;
+void draw_glyph(int X, int Y, unsigned fg) {
+  if (Y < 0 || Y > bufH - face->glyph->bitmap.rows
+          || X < 0 || X > bufW - face->glyph->bitmap.width) return;
   if(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *b = &face->glyph->bitmap.buffer[0];
@@ -83,50 +86,35 @@ void draw_glyph(int X, int Y, unsigned fg, unsigned bg,
   int i, j, k = 0, l, o;
   double r;
   fR = ((fg & 0xff0000) >> 16); fG = ((fg & 0xff00) >> 8);
-  fB = (fg & 0xff); bR = ((bg & 0xff0000) >> 16);
-  bG = ((bg & 0xff00) >> 8); bB = (bg & 0xff);
+  fB = (fg & 0xff); bR = 0; bG = 0; bB = 34;
   j = Y + face->glyph->bitmap.rows;
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
     for (l = X; l < i; l++) {
       if (b[k] == 0) {k++; continue;}
       if (b[k] == 255) {
-        p[Y * bffwdth + l] = fg;
+        p[Y * bufW + l] = fg;
         k++; continue;
       }
       d = 0xff000000;
-      r = gc[b[k]] / 255.0;
+      r = gct[b[k]] / 255.0;
       o = r * fR + (1 - r) * bR + 0.5;
       d += o << 16;
       o = r * fG + (1 - r) * bG + 0.5;
       d += o << 8;
       o = r * fB + (1 - r) * bB + 0.5;
       d += o;
-      p[Y * bffwdth + l] = d;
+      p[Y * bufW + l] = d;
       k++;
     }
   }
 }
 
 void text_run(int X, int Y, unsigned char *str, int length,
-        unsigned fg, unsigned bg) {
-  int pos = 0, num, i, j = 0;
+        unsigned fg) {
+  int pos = 0, num;
   unsigned u, gi;
-  double c, d;
-  unsigned char gc[256];  // gamma correction table
-  if (X > bffwdth - 50 || X < 0 || Y > bffhght - 10 || Y < 30) return;
-                    //Section: make table
-  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
-                        23, 27, 32, 39}; //curve
-  d = 255.5;
-  for (i = 255; i > -1; i--) {
-    gc[i] = d;
-    if (i % 16 == 15) {
-       c = cv[j] / 16.0;
-       j++;
-    }
-    d -= c;
-  }
+  if (X > bufW - 50 || X < 0 || Y > bufH - 10 || Y < 30) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -152,14 +140,14 @@ void text_run(int X, int Y, unsigned char *str, int length,
     }
     if (u == 0) break;
     else if (u == 10) {
-      X = 30; Y += txthght + 5;
-      if (Y > bffhght - 10) break;
+      X = 30; Y += txtH + 5;
+      if (Y > bufH - 10) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bffwdth - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > bffhght - 10) break;
+      if (X > bufW - 50) {
+        X = 30; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -170,12 +158,12 @@ void text_run(int X, int Y, unsigned char *str, int length,
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
         draw_glyph(face->glyph->bitmap_left + X,
-                Y - face->glyph->bitmap_top, fg, bg, &gc[0]);
+                Y - face->glyph->bitmap_top, fg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bffwdth - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > bffhght - 10) break;
+      if (X > bufW - 50) {
+        X = 30; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     pos += num;
@@ -184,11 +172,11 @@ void text_run(int X, int Y, unsigned char *str, int length,
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  srfW = width; srfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  evloop = false;
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
@@ -227,18 +215,18 @@ void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
       else if (key == 30) ky[1] = true;
       else if (key == 31) ky[2] = true;
       else ky[3] = true;
-      key_dwn = true;
+      kydwn = true;
     }
   }
   else {
-    if (key == 1) xit = true;
+    if (key == 1) evloop = false;
     else if (key == 32 || key == 30 || key == 31 || key == 17) {
       if (key == 32) ky[0] = false;
       else if (key == 30) ky[1] = false;
       else if (key == 31) ky[2] = false;
       else ky[3] = false;
-      if (key_dwn && !ky[0] && !ky[1] && !ky[2] && !ky[3])
-              key_dwn = false;
+      if (kydwn && !ky[0] && !ky[1] && !ky[2] && !ky[3])
+              kydwn = false;
     }
   }
 }
@@ -283,8 +271,8 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
 
 void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
         unsigned time, unsigned button, unsigned state) {
-  if (state == 1) pntr_dwn = true;
-  else pntr_dwn = false;
+  if (state == 1) msdwn = true;
+  else msdwn = false;
 }
 
 void pntr_axis(void *data, wl_pointer *pntr, unsigned time,
@@ -338,49 +326,77 @@ wl_buffer_listener buff_listnr = {
 };
 
 void draw_animat() {
-  int status = 0;
-  unsigned char doc[] = "Some text";
-  redraw = false;
-  if (pntr_dwn && (mX != hstxtX || mY != hstxtY) && mX > 99
-         && mX < bffwdth - 60 && mY > 21 && mY < bffhght - 12) {
-    txtX = mX; txtY = mY;
-    fill_rectangle(hstxtX - 60, hstxtY - 21, 120, 30, 0xff000022);
-    text_run(txtX - 54, txtY, &doc[0], 9, 0xffaaaa66, 0xff000022);
-    status += 2;
+  redraw = false; 
+  wl_surface_attach(surf, buff, 0, 0);
+  if (tdrw) {
+    fill_rectangle(tXh, tYh, tW, tH, 0xff000022);
+    wl_surface_damage(surf, tXh, tYh, tW, tH);
+    tXh = tX; tYh = tY;
   }
-  if (key_dwn) {
-    fill_rectangle(hist_rX, hist_rY, 50, 80, 0xff000022);
-    fill_rectangle(rectX, rectY, 50, 80, 0xffaaaa66);
-    status += 4;
+  if (rdrw) {
+    fill_rectangle(rXh, rYh, rW, rH, 0xff000022);
+    wl_surface_damage(surf, rXh, rYh, rW, rH);
+    rXh = rX; rYh = rY;
+    fill_rectangle(rX, rY, rW, rH, 0xff444444);
+    wl_surface_damage(surf, rX, rY, rW, rH);
+  } 
+  if (tdrw) {
+    text_run(tX, tY + offset, txt, 9, 0xffaaaa66);
+    wl_surface_damage(surf, tX, tY, tW, tH);
   }
-  if (status != 0) wl_surface_attach(surf, buff, 0, 0);
-  if ((status & 2) == 2) {
-    wl_surface_damage(surf, hstxtX - 60, hstxtY - 21, 120, 30);
-    wl_surface_damage(surf, txtX - 60, txtY - 21, 120, 30);
-    hstxtX = txtX; hstxtY = txtY; 
-  }
-  if ((status & 4) == 4) {
-    wl_surface_damage(surf, hist_rX, hist_rY, 50, 80);
-    wl_surface_damage(surf, rectX, rectY, 50, 80);
-    hist_rX = rectX; hist_rY = rectY;
-  }
-  if (status != 0) {
-    wl_surface_commit(surf);
-    wl_display_flush(dis); // <-- This needs to be here for
-  }                        //     key-down driven animation.
-  else redraw = true;
+  wl_surface_commit(surf);
+  wl_display_flush(dis);
 }
 
 void animate() {
-  while (!xit) {
-    if (key_dwn && redraw) {
-      if (ky[0] && rectX < bffwdth - 55) rectX += 5;
-      if (ky[1] && rectX > 5) rectX -= 5;
-      if (ky[2] && rectY < bffhght - 85) rectY += 5;
-      if (ky[3] && rectY > 5) rectY -= 5;
-    }
-    if (redraw && (key_dwn || pntr_dwn)) {
-      thread t2(draw_animat); t2.detach();
+  int x, y, w, h;
+  w = 0.5 * tW; h = 0.5 * tH;
+  while (evloop) {
+    if ((kydwn || msdwn) && redraw) {
+      tdrw = false; rdrw = false;
+      if (kydwn) {
+        if (ky[0] && !ky[1] && rX < bufW - rW - mv) {
+                rX += mv; rdrw = true;}
+        if (ky[1] && !ky[0] && rX > mv) {
+               rX -= mv; rdrw = true; }
+        if (ky[2] && !ky[3] && rY < bufH - rH - mv) {
+                rY += mv; rdrw = true;}
+        if (ky[3] && !ky[2] && rY > mv) {
+                rY -= mv; rdrw = true; }
+      }
+      if (msdwn) {
+        x = mX - w; y = mY - h;
+        if (x < bufW - tW && x > 0 && y < bufH - tH
+                && y > 0 && (x != tX || y != tY)) {
+          tX = x; tY = y; tdrw = true;
+        }
+      }
+                    //hit testing rectangles
+      if (rdrw && !tdrw) {
+        if ((rXh < tX + tW
+                && rXh + rW > tX
+                && rYh < tY + tH
+                && rYh + rH > tY)
+                || (rX < tX + tW
+                && rX + rW > tX
+                && rY < tY + tH
+                && rY + rH > tY)) {
+          tdrw = true;
+        }
+      }
+      if (!rdrw && tdrw) {
+        if ((tXh < rX + rW
+                && tXh + tW > rX
+                && tYh < rY + rH
+                && tYh + tH > rY )
+                || (tX < rX + rW
+                && tX + tW > rX
+                && tY < rY + rH
+                && tY + tH > rY )) {
+          rdrw = true;
+        }
+      }
+      if (tdrw || rdrw) { thread t2(draw_animat); t2.detach(); }
     }   
     this_thread::sleep_for(chrono::milliseconds(30));
   }
@@ -388,23 +404,26 @@ void animate() {
 
 void draw_resize() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
-  unsigned c = 0xffaaaa66, b = 0xff000022;
+  bufW = srfW; bufH = srfH;
+  if (buff) wl_buffer_destroy(buff);
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
   int i, j;
-  j = bffwdth * bffhght;
-  for (i = 0; i < j; i++) p[i] = b;
-  unsigned char doc[] = "Some text";
-  fill_rectangle(rectX, rectY, 50, 80, 0xffaaaa66);
-  text_run(txtX - 54, txtY, &doc[0], 9, 0xffaaaa66, 0xff000022);
+  j = bufW * bufH;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
+  rX = txtH * 7; rY = txtH * 3.5;
+  tX = txtH * 3; tY = txtH * 1.2;
+  fill_rectangle(rX, rY, rW, rH, 0xff444444);
+  text_run(tX, tY + offset, txt, 9, 0xffaaaa66);
+  rXh = rX; rYh = rY;
+  tXh = tX; tYh = tY;
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
   wl_surface_commit(surf);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+  if (redraw && (srfW != bufW || srfH != bufH)) {
     thread t3(draw_resize); t3.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
   }
@@ -430,7 +449,7 @@ void output_geometry(void* data, wl_output *wl_output,
 
 void output_mode(void *data, wl_output *wl_output,
         unsigned flags, int width, int height, int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
 }
 
 void output_done(void *data, wl_output *wl_output) {
@@ -505,7 +524,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 832, 468);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -515,7 +534,7 @@ int main() {
   wl_keyboard_add_listener(kybrd, &kybrd_lstnr, NULL);
                 //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0);                                     //<sys/mman.h>
@@ -526,20 +545,53 @@ int main() {
   crsr_surf = wl_compositor_create_surface(comp);
                 //Section: Prep font
   FT_Init_FreeType(&lbrry);
-  if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
+  if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSans.otf",
           0, &face)) {printf("font not loaded\n"); return 1;}
   //printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
-  FT_Set_Pixel_Sizes(face, 0, txthght);
+  txtH = 28;
+  FT_Set_Pixel_Sizes(face, 0, txtH);
+                //Section: make table
+  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
+                        23, 27, 32, 39}; //curve
+  int i, j = 0;
+  double c, d;
+  d = 255.5;
+  for (i = 255; i > -1; i--) {
+    gct[i] = d;
+    if (i % 16 == 15) {
+       c = cv[j] / 16.0;
+       j++;
+    }
+    d -= c;
+  }
                 //Section: Show window
-  surfwidth = 864; surfheight = 486;
-  rectX = 100; rectY = 100; hist_rX = 100; hist_rY = 100;
-  txtX = 300; txtY = 100; hstxtX = 300; hstxtY = 100;
+  srfW = 864; srfH = 486;
+  rW = txtH * 5; rH = txtH * 1.5;
+  tW = txtH * 4.7; tH = txtH * 1.3;
+  offset = txtH * 0.87; mv = txtH * 0.25;
   draw_resize();
+  evloop = true;
   thread t1(animate); t1.detach();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!evloop) break;
   }
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (pntr) wl_pointer_destroy(pntr);
+  if (seat) wl_seat_destroy(seat);
+  if (crsr_theme) wl_cursor_theme_destroy(crsr_theme);
+  if (crsr_surf) wl_surface_destroy(crsr_surf);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
   wl_shm_pool_destroy(pool);
+  munmap(p, size); p = NULL;
+  if (face) FT_Done_Face(face);
+  if (lbrry) FT_Done_FreeType(lbrry);
   wl_display_disconnect(dis);
 }
