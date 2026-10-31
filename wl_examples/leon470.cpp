@@ -1,16 +1,19 @@
 /*  leon470.cpp | render *.otf and *.ttf fonts
       use  fc-list | grep "\.otf"  or  "\.ttf"  to see your system fonts
-      modify line 487 to change fonts
+      modify line 526 to change fonts
       [Q] or [ESC] to close
 
     *needs*  xdg-shell-protocol.cpp  and  xdg-shell-client-protocol.h
              see wl_examplesREADME.txt
 
     COMPILE : -
-    g++ $(pkg-config --cflags freetype2 ..etc..) your_source.cpp -o your_program $(pkg-config --libs freetype2 ..etc..)
+    g++ $(pkg-config --cflags freetype2 ..etc..) your_source.cpp -o your_program $(pkg-config --libs -lfreetype ..etc..)
 
     g++ -I/usr/include/freetype2 xdg-shell-protocol.cpp leon470.cpp -o leon -lwayland-client -lwayland-cursor -lfreetype
-                                                       [251027] */
+      Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                      - - - - - -   prefix with the following for debug   - - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+    g++ -fsanitize=thread -g -O1 . . .
+                                                      [251027] */
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -23,6 +26,7 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <atomic>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
 
@@ -46,21 +50,22 @@ wl_keyboard *kybrd;
 FT_Library lbrry;
 FT_Face face;
 unsigned *p; // pixel array for window
-bool xit = false, redraw = true, key_dwn = false;
-int hrdwrX, hrdwrY;
-int surfwidth, surfheight;
-int bffwdth, bffhght;
-int txthght, mX, mY;
+atomic <bool> loop = true, redraw = true, kydwn = false;
+int monW, monH;
+int surfW, surfH;
+int bufW, bufH;
+int txtH, mX, mY;
+unsigned char gct[256];  // gamma correction table
 
 void microview() {
   redraw = false;
   int src, dst, end, mvx, mvy;
-  int i, j, k, l, m;
-  src = (mY - 10) * bffwdth + mX - 8;
-  mvx = (bffwdth - 192) / 2; mvy = bffhght - 240;
-  dst = mvy * bffwdth + mvx;
-  end = bffwdth * bffhght;
-  l = 0;
+  int i, j, k, m, n;
+  src = (mY - 10) * bufW + mX - 8;
+  mvx = (bufW - 192) / 2; mvy = bufH - 240;
+  dst = mvy * bufW + mvx;
+  end = bufW * bufH;
+  n = 0;
   while (dst < end) {
     i = dst; j = dst + 192; k = 0; m = src;
     while (i < j) {
@@ -70,26 +75,25 @@ void microview() {
       }
       i++; k++;	    
     }
-    if (l % 12 == 10) {
-      dst += bffwdth; l++;
-      src += bffwdth;
+    if (n % 12 == 10) {
+      dst += bufW; n++;
+      src += bufW;
     }
-    dst += bffwdth; l++;
+    dst += bufW; n++;
   }
   wl_surface_attach(surf, buff, 0, 0);
   wl_surface_damage(surf, mvx, mvy, 192, 240);
   wl_surface_commit(surf);
 }
 
-void draw_glyph(unsigned *m, int buffW, int buffH, int X, int Y,
-        unsigned fg, unsigned bg, unsigned char* gc) {
-  if (Y < 0 || Y > buffH - face->glyph->bitmap.rows
-          || X < 0 || X > buffW - face->glyph->bitmap.width) return;
+void draw_glyph(int X, int Y, unsigned fg, unsigned bg) {
+  if (Y < 0 || Y > bufH - face->glyph->bitmap.rows
+          || X < 0 || X > bufW - face->glyph->bitmap.width) return;
   if(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *b = &face->glyph->bitmap.buffer[0];
   unsigned d;
-  int i, j, k = 0, l, o;
+  int i, j, k = 0, n, o;
   double r;
   fR = ((fg & 0xff0000) >> 16); fG = ((fg & 0xff00) >> 8);
   fB = (fg & 0xff); bR = ((bg & 0xff0000) >> 16);
@@ -97,46 +101,32 @@ void draw_glyph(unsigned *m, int buffW, int buffH, int X, int Y,
   j = Y + face->glyph->bitmap.rows;
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
-    for (l = X; l < i; l++) {
+    for (n = X; n < i; n++) {
       if (b[k] == 0) {}
       else if (b[k] == 255) {
-        m[Y * buffW + l] = fg;
+        p[Y * bufW + n] = fg;
       }
       else {
         d = 0xff000000;
-        r = gc[b[k]] / 255.0;
+        r = gct[b[k]] / 255.0;
         o = r * fR + (1 - r) * bR + 0.5;
         d += o << 16;
         o = r * fG + (1 - r) * bG + 0.5;
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        m[Y * buffW + l] = d;
+        p[Y * bufW + n] = d;
       }
       k++;
     }
   }
 }
 
-void text_run(unsigned *m, int buffW, int buffH, int X, int Y,
-        unsigned char *str, int length, unsigned fg, unsigned bg) {
-  int pos = 0, num, i, j = 0;
-  unsigned u, gi;
-  double c, d;
-  unsigned char gc[256];  // gamma correction table
-  if (X > buffW - 50 || X < 0 || Y > buffH - 10 || Y < 30) return;
-                    //Section: make table
-  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
-                        23, 27, 32, 39}; //curve
-  d = 255.5;
-  for (i = 255; i > -1; i--) {
-    gc[i] = d;
-    if (i % 16 == 15) {
-       c = cv[j] / 16.0;
-       j++;
-    }
-    d -= c;
-  }
+void text_run(int X, int Y, unsigned char *str, int length,
+        unsigned fg) {
+  int pos = 0, num, i;
+  unsigned u, gi, bg;
+  if (X > bufW - 50 || X < 0 || Y > bufH - 10 || Y < 30) return;
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -162,14 +152,14 @@ void text_run(unsigned *m, int buffW, int buffH, int X, int Y,
     }
     if (u == 0) break;
     else if (u == 10) {
-      X = 30; Y += txthght + 5;
-      if (Y > buffH - 10) break;
+      X = 30; Y += txtH + 5;
+      if (Y > bufH - 10) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > buffW - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > buffH - 10) break;
+      if (X > bufW - 50) {
+        X = 30; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -179,26 +169,67 @@ void text_run(unsigned *m, int buffW, int buffH, int X, int Y,
       gi = FT_Get_Char_Index(face, u);
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
-        draw_glyph(m, buffW, buffH, face->glyph->bitmap_left + X,
-                Y - face->glyph->bitmap_top, fg, bg, &gc[0]);
+        bg = p[(Y - (txtH / 3)) * bufW +
+                X + ((face->glyph->advance.x >> 6) / 2)];
+        draw_glyph(face->glyph->bitmap_left + X,
+                Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > buffW - 50) {
-        X = 30; Y += txthght + 5;
-        if (Y > buffH - 10) break;
+      if (X > bufW - 50) {
+        X = 30; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     pos += num;
   }
 }
 
+int text_width(unsigned char* str, int length) {
+  int pos = 0, num, i = 0;
+  unsigned u, gi;
+  while (pos < length) {
+    if (str[pos] < 128) {
+      num = 1;
+      u = str[pos];
+    }
+    else if ((str[pos] & 224) == 192) {
+      num = 2;
+      u = ((str[pos] & 31) << 6) + (str[pos + 1] & 63);
+    }
+    else if ((str[pos] & 240) == 224) {
+      num = 3;
+      u = ((str[pos] & 15) << 12) + ((str[pos + 1] & 63) << 6)
+              + (str[pos + 2] & 63);
+    }
+    else if ((str[pos] & 248) == 240) {
+      num = 4;
+      u = ((str[pos] & 7) << 18) + ((str[pos + 1] & 63) << 12)
+              + ((str[pos + 2] & 63) << 6) + (str[pos + 3] & 63);
+    }
+    else {
+      pos++; continue;
+    }
+    if (u == 0) break;
+    else if (u < 32 || (u > 127 && u < 161)) {
+      pos += num; continue;
+    }
+    else {
+      gi = FT_Get_Char_Index(face, u);
+      if (FT_Load_Glyph(face, gi, 0)) break;
+      i += face->glyph->advance.x >> 6;
+    }
+    pos += num;
+  }
+  return i;
+}
+
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  surfW = width; surfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  loop = false;
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
@@ -230,10 +261,10 @@ void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
         unsigned time, unsigned key, unsigned state) {
-  if (state == 1) key_dwn = true;
+  if (state == 1) kydwn = true;
   else {
-    key_dwn = false;
-    if (key == 16 || key == 1) xit = true;
+    kydwn = false;
+    if (key == 16 || key == 1) loop = false;
   } 
 }
 
@@ -273,8 +304,8 @@ void pntr_leave(void *data, wl_pointer *pntr, unsigned serial,
 void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
-  if (!key_dwn && redraw && mX > 7 && mX < bffwdth - 8
-            && mY > 9 && mY < bffhght - 10) {
+  if (!kydwn && redraw && mX > 7 && mX < bufW - 8
+            && mY > 9 && mY < bufH - 10) {
     thread t2(microview); t2.detach();
   } 
 }
@@ -334,35 +365,43 @@ wl_buffer_listener buff_listnr = {
 
 void draw() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
-  unsigned c = 0xffaaaa66, b = 0xff000022;
-  int i, j;
-  j = bffwdth * bffhght;
-  for (i = 0; i < j; i++) p[i] = b;
-
+  bufW = surfW; bufH = surfH;
+  if (buff) wl_buffer_destroy(buff);
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
+  int i, j, m, n;
+  j = bufW * bufH;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
+                //Section: Gradient
+  j = (bufW - 256) / 2 - 30;
+  m = (25 * bufW + j);
+  for (i = 0; i < 60; i++) {
+    for (n = 0; n < 256; n++) {
+      p[m] = n;
+      m++;
+    }
+    m += bufW - 255;
+  }
                 //Section: text rendering
+  unsigned char ttl[] = "Text Rendering";
+  i = strlen(reinterpret_cast<const char*>(ttl));
+  j = (bufW - text_width(ttl, i)) / 2;
+  text_run(j, 65, ttl, i, 0xffaaaa66);
   unsigned char doc[] = "\tSimple rendering with extra strengthening on edge pixels (pseudo gamma correction). No kerning. Assuming 'flat' background. Does not offer texture or gradient foreground.\n\tUtf8 encoding L♡VE, j☺y, Pe☮ce.\n\tBecause it uses FreeType2, almost any level of complexity can be added to this basic approach..\n\tRegards ←";
   i = strlen(reinterpret_cast<const char*>(doc));
-  text_run(p, bffwdth, bffhght, 30, 100, &doc[0], i, c, b);
-/* format: text_run(unsigned*       pointer to buffer begin in memory
-                    int             buffer width
-                    int             buffer height
-                    int             penX,
+  text_run(30, 120, &doc[0], i, 0xffaaaa66);
+/* format: text_run(int             penX,
                     int             penY,
                     unsigned char*  pointer to start position,
                     int             length of encoding in bytes,
-                    unsigned        foregound color with alpha channel,
-                    unsigned        backgound solidcolor); */
-
+                    unsigned        foregound color); */
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
   wl_surface_commit(surf);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+  if (redraw && (surfW != bufW || surfH != bufH)) {
     thread t1(draw); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
   }
@@ -388,7 +427,7 @@ void output_geometry(void* data, wl_output *wl_output,
 
 void output_mode(void *data, wl_output *wl_output,
         unsigned flags, int width, int height, int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
 }
 
 void output_done(void *data, wl_output *wl_output) {
@@ -463,7 +502,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 832, 468);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -473,7 +512,7 @@ int main() {
   wl_keyboard_add_listener(kybrd, &kybrd_lstnr, NULL);
                 //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0);                                     //<sys/mman.h>
@@ -487,14 +526,47 @@ int main() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); return 1;}
   //printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
-  FT_Set_Pixel_Sizes(face, 0, txthght);
+  txtH = 28;
+  FT_Set_Pixel_Sizes(face, 0, txtH);
+                //Section: make table
+  int i, j = 0;
+  double c, d;
+  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
+                        23, 27, 32, 39}; //curve
+  d = 255.5;
+  for (i = 255; i > -1; i--) {
+    gct[i] = d;
+    if (i % 16 == 15) {
+       c = cv[j] / 16.0;
+       j++;
+    }
+    d -= c;
+  }
                 //Section: Show window
-  surfwidth = 864; surfheight = 486;
+  surfW = 864; surfH = 486;
   draw();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!loop) break;
   }
+  this_thread::sleep_for(chrono::milliseconds(30));
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (pntr) wl_pointer_destroy(pntr);
+  if (seat) wl_seat_destroy(seat);
+  if (crsr_theme) wl_cursor_theme_destroy(crsr_theme);
+  if (crsr_surf) wl_surface_destroy(crsr_surf);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
   wl_shm_pool_destroy(pool);
+  munmap(p, size); p = NULL;
+  if (face) FT_Done_Face(face);
+  if (lbrry) FT_Done_FreeType(lbrry);
   wl_display_disconnect(dis);
 }
+
