@@ -575,6 +575,7 @@ int main() {
   while (wl_display_dispatch(dis) != -1) {
     if (!evloop) break;
   }
+  this_thread::sleep_for(chrono::milliseconds(30));
   if (kybrd) wl_keyboard_destroy(kybrd);
   if (pntr) wl_pointer_destroy(pntr);
   if (seat) wl_seat_destroy(seat);
