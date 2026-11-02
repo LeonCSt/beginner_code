@@ -7,7 +7,10 @@
              see wl_examplesREADME.txt
 
     g++ xdg-shell-protocol.cpp leon450.cpp -o leon -lwayland-client -lwayland-cursor
-                                                            [251003] */
+      Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                     or - - - - -   prefix with the following for debug   - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+    g++ -fsanitize=thread -g -O1 . . .
+                                                           [251003] */
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -40,20 +43,20 @@ wl_cursor *crsr;
 wl_cursor_image *crsr_img;
 wl_keyboard *kybrd;
 unsigned *p; // pixel array for window
-bool xit = false, redraw = true;
-int hrdwrX, hrdwrY;
-int surfwidth, surfheight;
-int bffwdth, bffhght;
+bool evloop = true, redraw = true;
+int monW, monH;
+int surfW, surfH;
+int bufW, bufH;
 unsigned pntr_serial;
 int pcrsr = 0; //present cursor
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  surfW = width; surfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  evloop = false;
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
@@ -88,7 +91,7 @@ void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
   if (state == 1) {
   }
   else {
-    if (key == 16 || key == 1) xit = true;
+    if (key == 16 || key == 1) evloop = false;
   } 
 }
 
@@ -116,9 +119,10 @@ void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
   crsr = wl_cursor_theme_get_cursor(crsr_theme, "left_ptr");
   crsr_img = crsr->images[0];
   crsr_buff = wl_cursor_image_get_buffer(crsr_img);
-  wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
+  wl_pointer_set_cursor(pntr, serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
   pcrsr = 0;
 }
@@ -136,16 +140,17 @@ void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
   if (state == 1) return;
   pcrsr++;
   if (pcrsr == 3) pcrsr = 0;
-  string cn = "";
-  if (pcrsr == 0) cn = "left_ptr";
-  else if (pcrsr == 1) cn = "xterm";
-  else cn = "hand2";
-  crsr = wl_cursor_theme_get_cursor(crsr_theme, cn.c_str());
+  if (pcrsr == 0)
+          crsr = wl_cursor_theme_get_cursor(crsr_theme, "left_ptr");
+  else if (pcrsr == 1)
+          crsr = wl_cursor_theme_get_cursor(crsr_theme, "xterm");
+  else crsr = wl_cursor_theme_get_cursor(crsr_theme, "hand2");
   crsr_img = crsr->images[0];
   crsr_buff = wl_cursor_image_get_buffer(crsr_img);
   wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
 }
 
@@ -200,31 +205,32 @@ wl_buffer_listener buff_listnr = {
 
 void draw() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
+  bufW = surfW; bufH = surfH;
+  if (buff) wl_buffer_destroy(buff);
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
   unsigned c = 0xffaaaa66;
   int i, j, m, n, o;
-  int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
+  int k = (bufH / 2) * bufW + (bufW / 2);
   double r;
-  j = bffwdth * bffhght;
+  j = bufW * bufH;
   for (i = 0; i < j; i++) p[i] = 0xff000022;
             //Section: Circle
-  if (bffwdth <= bffhght) r = bffwdth * 0.45;
-  else r = bffhght * 0.45;
+  if (bufW <= bufH) r = bufW * 0.45;
+  else r = bufH * 0.45;
   o = 0.7071 * r + 1.5;
   for (i = 0; i < o; i++) {
     j = (cos(asin(i / r)) * r + 0.5);
-    n = i * bffwdth; m = j * bffwdth;
+    n = i * bufW; m = j * bufW;
     p[k + i + m] = c; p[k + i - m] = c;
     p[k - i + m] = c; p[k - i - m] = c;
     p[k + j + n] = c; p[k + j - n] = c;
     p[k - j + n] = c; p[k - j - n] = c;
   }
             //Section: black and white squares
-  m = bffwdth - 200;
-  n = 21 * bffwdth - 220;
-  o = (bffhght - 219) * bffwdth - 220; 
+  m = bufW - 200;
+  n = 21 * bufW - 220;
+  o = (bufH - 219) * bufW - 220; 
   for (j = 0; j < 200; j++) {
     for (i = 0; i < 200; i++) {
       p[n] = 0xffffffff; p[o] = 0xff000000;
@@ -234,11 +240,12 @@ void draw() {
   }
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+  if (redraw && (surfW != bufW || surfH != bufH)) {
     thread t1(draw); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
   }
@@ -264,7 +271,7 @@ void output_geometry(void* data, wl_output *wl_output,
 
 void output_mode(void *data, wl_output *wl_output,
         unsigned flags, int width, int height, int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
 }
 
 void output_done(void *data, wl_output *wl_output) {
@@ -339,7 +346,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 832, 468);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -349,7 +356,7 @@ int main() {
   wl_keyboard_add_listener(kybrd, &kybrd_lstnr, NULL);
                 //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0); //<sys/mman.h>
@@ -359,11 +366,28 @@ int main() {
   crsr_theme = wl_cursor_theme_load(nullptr, 24, shm);
   crsr_surf = wl_compositor_create_surface(comp);
                 //Section: Show window
-  surfwidth = 864; surfheight = 486;
+  surfW = 864; surfH = 486;
   draw();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!evloop) break;
   }
+  this_thread::sleep_for(chrono::milliseconds(30));
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (pntr) wl_pointer_destroy(pntr);
+  if (seat) wl_seat_destroy(seat);
+  if (crsr_theme) wl_cursor_theme_destroy(crsr_theme);
+  if (crsr_surf) wl_surface_destroy(crsr_surf);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
   wl_shm_pool_destroy(pool);
+  munmap(p, size); p = NULL;
   wl_display_disconnect(dis);
 }
+
