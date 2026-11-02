@@ -257,6 +257,7 @@ void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
   wl_pointer_set_cursor(pntr, serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
 }
 
@@ -419,6 +420,7 @@ void draw_resize() {
   tXh = tX; tYh = tY;
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
 }
 
