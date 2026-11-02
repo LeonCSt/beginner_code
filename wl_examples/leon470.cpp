@@ -50,7 +50,7 @@ wl_keyboard *kybrd;
 FT_Library lbrry;
 FT_Face face;
 unsigned *p; // pixel array for window
-atomic <bool> loop = true, redraw = true, kydwn = false;
+atomic <bool> loop = true, redraw = true;
 int monW, monH;
 int surfW, surfH;
 int bufW, bufH;
@@ -261,9 +261,7 @@ void kybrd_leave(void *data, wl_keyboard *kybrd, unsigned serial,
 
 void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
         unsigned time, unsigned key, unsigned state) {
-  if (state == 1) kydwn = true;
-  else {
-    kydwn = false;
+  if (state == 0) {
     if (key == 16 || key == 1) loop = false;
   } 
 }
@@ -294,6 +292,7 @@ void pntr_enter(void *data, wl_pointer *pntr, unsigned serial,
   wl_pointer_set_cursor(pntr, serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
 }
 
@@ -304,7 +303,7 @@ void pntr_leave(void *data, wl_pointer *pntr, unsigned serial,
 void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
-  if (!kydwn && redraw && mX > 7 && mX < bufW - 8
+  if (redraw && mX > 7 && mX < bufW - 8
             && mY > 9 && mY < bufH - 10) {
     thread t2(microview); t2.detach();
   } 
@@ -397,6 +396,7 @@ void draw() {
                     unsigned        foregound color); */
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
 }
 
