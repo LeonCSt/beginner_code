@@ -716,7 +716,7 @@ int main() {
           blinkeractive = true;
           thread t1(caretblinker); t1.detach();
         }
-	else if (evnt.xbutton.button == 2 && txtbxfocus  && !highlight) {
+        else if (evnt.xbutton.button == 2 && txtbxfocus  && !highlight) {
           if (select_own) getclipboard();
           else {
             operation = 2;
@@ -813,7 +813,7 @@ int main() {
           printf("Sending data '%s'\n", name);
           XFree(name);
           name = XGetAtomName(dis, sev->target);  
-	  printf("Requester's target = '%s'\n", name);
+          printf("Requester's target = '%s'\n", name);
           XChangeProperty(dis, sev->requestor, sev->property,
                   utf8str, 8,  PropModeReplace,
                   reinterpret_cast<unsigned char*>(&clip[0]),
