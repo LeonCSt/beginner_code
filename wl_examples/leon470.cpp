@@ -10,7 +10,7 @@
     g++ $(pkg-config --cflags freetype2 ..etc..) your_source.cpp -o your_program $(pkg-config --libs -lfreetype ..etc..)
 
     g++ -I/usr/include/freetype2 xdg-shell-protocol.cpp leon470.cpp -o leon -lwayland-client -lwayland-cursor -lfreetype
-      Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                      - - - - - -   prefix with the following for debug   - - - - - -
+      Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                     or - - - - -   prefix with the following for debug   - - - - -
     g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
     g++ -fsanitize=thread -g -O1 . . .
                                                       [251027] */
