@@ -19,7 +19,10 @@
    COMPILE : - 
    g++ xdg-shell-protocol.cpp leon440.cpp -o leon -lwayland-client
 
-   Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon    */
+   Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon   
+   or - - - - -   prefix with the following for debug   - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+ */
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -27,7 +30,6 @@
 #include <stdio.h>
 #include <wayland-client.h>
 #include <cstring>
-#include <thread>
 #include <math.h>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
@@ -46,26 +48,26 @@ wl_shm_pool *pool;
 wl_buffer *buff;
 wl_keyboard *kybrd;
 unsigned *p; // pixel array for window
-bool xit = false, redraw = true;
-int hrdwrX, hrdwrY;
-int surfwidth, surfheight, wm_capabils;
-int bffwdth, bffhght;
+bool evloop = true, redraw = true;
+int monW, monH;
+int surfW, surfH, wm_capabils;
+int bufW, bufH;
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  surfW = width; surfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  evloop = false;
 }
 
 void top_wm_capabils(void *data, xdg_toplevel *xdgtop,
         wl_array *caps) {
-  printf("wm_caps[0] = %d\n", ((unsigned*)caps->data)[0]);
-  printf("wm_caps[1] = %d\n", ((unsigned*)caps->data)[1]);
-  printf("wm_caps[2] = %d\n", ((unsigned*)caps->data)[2]);
-  printf("wm_caps[3] = %d\n", ((unsigned*)caps->data)[3]);
+  int i, j;
+  j = caps->size / 4;
+  for (i = 0; i < j; i++)
+          printf("wm_caps[%d] = %d\n", i, ((unsigned*)caps->data)[i]);
 }
 
 xdg_toplevel_listener top_lstnr = {
@@ -114,7 +116,7 @@ void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
     printf("key %d pressed\n", key);
     return;
   }
-  if (key == 16 || key == 1) xit = true;
+  if (key == 16 || key == 1) evloop = false;
   printf("key %d released\n", key); 
 }
 
@@ -147,20 +149,21 @@ wl_buffer_listener buff_listnr = {
 
 void draw() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
+  bufW = surfW; bufH = surfH;
+  if (buff) wl_buffer_destroy(buff);
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
   int c = 0xaaaa66, i, j, m, n, o;
-  j = bffwdth * bffhght;
+  j = bufW * bufH;
   for (i = 0; i < j; i++) p[i] = 0xff000022;
   double r; 
-  int k = (bffhght / 2) * bffwdth + (bffwdth / 2);
-  if (bffwdth <= bffhght) r = bffwdth * 0.45;
-  else r = bffhght * 0.45;
+  int k = (bufH / 2) * bufW + (bufW / 2);
+  if (bufW <= bufH) r = bufW * 0.45;
+  else r = bufH * 0.45;
   o = 0.7071 * r + 1.5;
   for (int i = 0; i < o; i++) {
     j = cos(asin(i / r)) * r + 0.5;
-    n = i * bffwdth; m = j * bffwdth;
+    n = i * bufW; m = j * bufW;
     p[k + i + m] = c; p[k + i - m] = c;
     p[k - i + m] = c; p[k - i - m] = c;
     p[k + j + n] = c; p[k + j - n] = c;
@@ -168,14 +171,15 @@ void draw() {
   }
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
-  printf("another commit: size: %d X %d\n", bffwdth, bffhght);
+  printf("another commit: size: %d X %d\n", bufW, bufH);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
-    thread t1(draw); t1.detach();
+  if (redraw && (surfW != bufW || surfH != bufH)) {
     xdg_surface_ack_configure(xdgsurf, serial);
+    if (redraw) draw();
   }
 }
 
@@ -200,7 +204,7 @@ void output_geometry(void* data, wl_output *wl_output,
 void output_mode(void *data, wl_output *wl_output,
         uint flags, int width, int height,
         int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
   printf("Hardware units: %d X %d   Refresh rate: %d mHz\n",
           width, height, refresh);
 }
@@ -278,7 +282,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 864, 486);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -286,18 +290,31 @@ int main() {
   wl_keyboard_add_listener(kybrd, &kybrd_lstnr, NULL);
               //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0);                                     //<sys/mman.h>
   pool = wl_shm_create_pool(shm, fd, size);
   close(fd);
               //Section: Show window
-  surfwidth = 864; surfheight = 486;
+  surfW = 864; surfH = 486;
   draw();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!evloop) break;
   }
-  wl_shm_pool_destroy(pool);
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (seat) wl_seat_destroy(seat);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
+  if (pool )wl_shm_pool_destroy(pool);
+  if (p) munmap(p, size);
   wl_display_disconnect(dis);
 }
+
