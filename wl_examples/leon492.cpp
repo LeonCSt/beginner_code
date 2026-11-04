@@ -23,7 +23,7 @@ using namespace std;
            xdg_surface *xdgsurf;
            wl_cursor_theme *crsr_theme;
            wl_cursor *crsr;
-	   FT_Library lbrry;
+           FT_Library lbrry;
            FT_Face face;
            int surfW, surfH;
            int txtH
