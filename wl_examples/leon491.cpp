@@ -12,7 +12,10 @@
              xdg-shell-client-protocol.h  |
 
     g++ -I/usr/include/freetype2 xdg-shell-protocol.cpp leon491.cpp leon492.cpp -o leon -lwayland-client -lwayland-cursor -lfreetype
-                                                       [251113] */
+      Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon                      - - - - - -   prefix with the following for debug   - - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+    g++ -fsanitize=thread -g -O1 . . .
+                                                      [251113] */
 
 #include "leon490.h"
 using namespace std;
@@ -27,12 +30,14 @@ wl_surface *d_surf;
 xdg_surface *xdgsurf;
 wl_cursor_theme *crsr_theme;
 wl_cursor *crsr;
+FT_Library lbrry;
 FT_Face face;
-int surfwidth, surfheight;
-int txthght, mX, mY, d_mx, d_my;
+int surfW, surfH;
+int txtH;
+atomic <int> mX, mY;
 bool setting, popfocus, popup;
-unsigned pntr_serial, d_key, d_key_state;
-unsigned d_pntr_btn, d_pntr_btn_state;
+atomic <unsigned> pntr_serial, d_key, d_key_state;
+atomic <unsigned> d_pntr_btn, d_pntr_btn_state;
             //End Section
 
 wl_output *out;
@@ -46,17 +51,17 @@ wl_buffer *crsr_buff;
 wl_cursor_image *crsr_img;
 wl_pointer *pntr;
 wl_keyboard *kybrd;
-FT_Library lbrry;
 unsigned *p; // pixel array for window
-bool xit = false, redraw = true, btn_focus = false;
-int hrdwrX, hrdwrY;
-int bffwdth, bffhght;
+atomic <bool> evloop = true, redraw = true, btn_focus = false;
+int monW, monH;
+int bufW, bufH;
 int btnX, btnY, btnW, btnH;
+unsigned char gct[256];  // gamma correction table
 unsigned char doc[] = "Click to open pop-up dialog";
 
 void launch_popup() {
-  xdg_toplevel_set_min_size(xdgtop, bffwdth, bffhght);
-  xdg_toplevel_set_max_size(xdgtop, bffwdth, bffhght);
+  xdg_toplevel_set_min_size(xdgtop, bufW, bufH);
+  xdg_toplevel_set_max_size(xdgtop, bufW, bufH);
   btn_focus = false;
   maind();
 }
@@ -101,7 +106,7 @@ void fill_rectangle(unsigned *m, int bW, int bH, int X, int Y,
 }
 
 void draw_glyph(unsigned *m, int bW, int bH, int X, int Y,
-        unsigned fg, unsigned bg, unsigned char* gc) {
+        unsigned fg, unsigned bg) {
   if (Y < 0 || Y > bH - face->glyph->bitmap.rows
           || X < 0 || X > bW - face->glyph->bitmap.width) return;
   if(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
@@ -123,7 +128,7 @@ void draw_glyph(unsigned *m, int bW, int bH, int X, int Y,
       }
       else {
         d = 0xff000000;
-        r = gc[b[k]] / 255.0;
+        r = gct[b[k]] / 255.0;
         o = r * fR + (1 - r) * bR + 0.5;
         d += o << 16;
         o = r * fG + (1 - r) * bG + 0.5;
@@ -139,25 +144,11 @@ void draw_glyph(unsigned *m, int bW, int bH, int X, int Y,
 
 void text_run(unsigned *m, int bW, int bH, int X, int Y,
         unsigned char *str, int length, unsigned fg, unsigned bg) {
-  int pos = 0, num, i, j = 0;
+  int pos = 0, num;
   unsigned u, gi;
-  double c, d;
-  unsigned char gc[256];  // gamma correction table
-  if (X > bW - txthght * 0.8 + 0.5 || X < 0
-          || Y > bH - txthght * 0.3 + 0.5 || Y < txthght * 0.8 + 0.5)
+  if (X > bW - txtH * 0.8 + 0.5 || X < 0
+          || Y > bH - txtH * 0.3 + 0.5 || Y < txtH * 0.8 + 0.5)
           return;
-                    //Section: make table
-  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
-                        23, 27, 32, 39}; //curve
-  d = 255.5;
-  for (i = 255; i > -1; i--) {
-    gc[i] = d;
-    if (i % 16 == 15) {
-       c = cv[j] / 16.0;
-       j++;
-    }
-    d -= c;
-  }
                     //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
@@ -183,13 +174,13 @@ void text_run(unsigned *m, int bW, int bH, int X, int Y,
     }
     if (u == 0) break;
     else if (u == 10) {
-      X = 30; Y += txthght + 5;
+      X = 30; Y += txtH + 5;
       if (Y > bH - 10) break;
     }
     else if(u == 9) {
       X += 100 - X % 100;
-      if (X > bW - txthght * 0.8 + 0.5) {
-        X = 30; Y += txthght + 5;
+      if (X > bW - txtH * 0.8 + 0.5) {
+        X = 30; Y += txtH + 5;
         if (Y > bH - 10) break;
       }
     }
@@ -201,11 +192,11 @@ void text_run(unsigned *m, int bW, int bH, int X, int Y,
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
         draw_glyph(&m[0], bW, bH, face->glyph->bitmap_left + X,
-                Y - face->glyph->bitmap_top, fg, bg, &gc[0]);
+                Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bW - txthght * 0.8 + 0.5) {
-        X = 30; Y += txthght + 5;
+      if (X > bW - txtH * 0.8 + 0.5) {
+        X = 30; Y += txtH + 5;
         if (Y > bH - 10) break;
       }
     }
@@ -258,6 +249,7 @@ void set_cursor() {
   wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
 }
 
@@ -265,10 +257,10 @@ void draw_button() {
   unsigned bg, fg = 0xffaaaa66;
   if (btn_focus) bg = 0xff222277; else bg = 0xff000022;
   int i = strlen(reinterpret_cast<const char*>(doc));
-  fill_rectangle(&p[0], bffwdth, bffhght, btnX + 1, btnY + 1,
+  fill_rectangle(&p[0], bufW, bufH, btnX + 1, btnY + 1,
           btnW - 2, btnH - 2, bg);
-  text_run(&p[0], bffwdth, bffhght, btnX + 20,
-          btnY + txthght * 1.08 + 0.5, &doc[0], i, fg, bg);
+  text_run(&p[0], bufW, bufH, btnX + 20,
+          btnY + txtH * 1.08 + 0.5, &doc[0], i, fg, bg);
 }
 
 void refresh_button() {
@@ -284,18 +276,18 @@ void dialog_return() {
   if (setting) printf("'X' setting is set to 'ON'\n");
   else printf("'X' setting is set to 'OFF'\n");
   xdg_toplevel_set_min_size(xdgtop, 864, 468);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   refresh_button();
   wl_display_flush(dis);
 }
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  surfW = width; surfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  evloop = false;
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
@@ -332,17 +324,17 @@ void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
     thread t5(d_kbd_key); t5.detach();
     return;
   }
-         /*    _ESC 1,  _TAB 15,  _Q 16,  _ENTER 28,    */
+         /*    _ESC 1,  _TAB 15,  _Q 16,  _ENTER 28, _SPACE 57,   */
   if (state == 1) {
   }
   else {
-    if (key == 16 || key == 1) { xit = true; return; }
+    if (key == 16 || key == 1) { evloop = false; return; }
     if (popup) return;
     if (key == 15) {
       btn_focus = !btn_focus;
       if (redraw) refresh_button();
     }
-    else if (key == 28 && btn_focus) {
+    else if (btn_focus && (key == 28 || key == 57)) {
       thread t3(launch_popup); t3.detach();
     }
   }
@@ -383,7 +375,6 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
   if (popfocus) {
-    d_mx = mX; d_my = mY;
     thread t2(d_pntr_motion); t2.detach();
     return;
   }
@@ -413,7 +404,7 @@ void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
     thread t4(d_pntr_button); t4.detach();
     return;
   }
-  if (popup) return;
+  if (popup) { d_close(); dialog_return(); return; }
   if (state == 1) {}
   else {
     if (btn_focus) {
@@ -473,22 +464,24 @@ wl_buffer_listener buff_listnr = {
 
 void draw_resize() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
+  bufW = surfW; bufH = surfH;
+  if (buff) wl_buffer_destroy(buff);
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
   unsigned fg = 0xffaaaa66, bg = 0xff000022;
   int i, j;
-  j = bffwdth * bffhght;
+  j = bufW * bufH;
   for (i = 0; i < j; i++) p[i] = bg;
-  draw_rectangle(&p[0], bffwdth, bffhght, btnX, btnY, btnW, btnH, fg);
+  draw_rectangle(&p[0], bufW, bufH, btnX, btnY, btnW, btnH, fg);
   draw_button();
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+  if (redraw && (surfW != bufW || surfH != bufH)) {
     thread t1(draw_resize); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
   }
@@ -514,7 +507,7 @@ void output_geometry(void* data, wl_output *wl_output,
 
 void output_mode(void *data, wl_output *wl_output,
         unsigned flags, int width, int height, int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
 }
 
 void output_done(void *data, wl_output *wl_output) {
@@ -589,7 +582,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 832, 468);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -599,7 +592,7 @@ int main() {
   wl_keyboard_add_listener(kybrd, &kybrd_lstnr, NULL);
                 //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0);                                     //<sys/mman.h>
@@ -613,19 +606,51 @@ int main() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); return 1;}
   //printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
-  FT_Set_Pixel_Sizes(face, 0, txthght);
+  txtH = 28;
+  FT_Set_Pixel_Sizes(face, 0, txtH);
+                //Section: make table
+  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
+                        23, 27, 32, 39}; //curve
+  int i, j = 0;
+  double c, d;
+  d = 255.5;
+  for (i = 255; i > -1; i--) {
+    gct[i] = d;
+    if (i % 16 == 15) {
+       c = cv[j] / 16.0;
+       j++;
+    }
+    d -= c;
+  }
                 //Section: Show window
-  surfwidth = 864; surfheight = 486;
-  int i = strlen(reinterpret_cast<const char*>(doc));
-  int j = text_width(&doc[0], i);
-  btnX = txthght * 3; btnY = txthght * 2;
-  btnW = j + 40; btnH = txthght * 1.6 + 0.5;
+  surfW = 864; surfH = 486;
+  i = strlen(reinterpret_cast<const char*>(doc));
+  j = text_width(&doc[0], i);
+  btnX = txtH * 3; btnY = txtH * 2;
+  btnW = j + 40; btnH = txtH * 1.6 + 0.5;
   draw_resize();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!evloop) break;
   }
-  if (popup) d_close();
-  wl_shm_pool_destroy(pool);
+  this_thread::sleep_for(chrono::milliseconds(30));
+  if (popup) { printf("closing popup\n"); d_close(); }
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (pntr) wl_pointer_destroy(pntr);
+  if (seat) wl_seat_destroy(seat);
+  if (crsr_theme) wl_cursor_theme_destroy(crsr_theme);
+  if (crsr_surf) wl_surface_destroy(crsr_surf);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
+  if (pool) wl_shm_pool_destroy(pool);
+  if (p) munmap(p, size);
+  if (face) FT_Done_Face(face);
+  if (lbrry) FT_Done_FreeType(lbrry);
   wl_display_disconnect(dis);
 }

@@ -1,9 +1,8 @@
 /*  leon490.h | Header file for leon491.cpp and leon492.cpp
          leon491.cpp handles the main window
          leon492.cpp handles the dialog popup window
-
-
                                                        [251113] */
+
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -15,6 +14,8 @@
 #include <cstring>
 #include <string>
 #include <thread>
+#include <atomic>
+#include <mutex>
 #include "xdg-shell-client-protocol.h"
 
 extern wl_display *dis;
@@ -26,12 +27,14 @@ extern wl_surface *d_surf;
 extern xdg_surface *xdgsurf;
 extern wl_cursor_theme *crsr_theme;
 extern wl_cursor *crsr;
+extern FT_Library lbrry;
 extern FT_Face face;
-extern int surfwidth, surfheight;
-extern int txthght, mX, mY, d_mx, d_my;
+extern int surfW, surfH;
+extern int txtH;
+extern std::atomic <int> mX, mY;
 extern bool setting, popfocus, popup;
-extern unsigned pntr_serial, d_key, d_key_state;
-extern unsigned d_pntr_btn, d_pntr_btn_state;
+extern std::atomic <unsigned> pntr_serial, d_key, d_key_state;
+extern std::atomic <unsigned> d_pntr_btn, d_pntr_btn_state;
 
 void maind();
 
