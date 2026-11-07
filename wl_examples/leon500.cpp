@@ -2,21 +2,21 @@
       [Ctrl] [C]  to cut      [Ctrl] [V]  to paste
       hold[Ctrl] [C]then[V]  to copy
         Textbox starts out empty so you have to copy
-	from somewhere else then paste in to get started.
+        from somewhere else then paste in to get started.
         Example -- copy --> "Utf8 encoding L♡VE, j☺y, Pe☮ce."
-	(In gvim it is [Shift] ['][=]  then  [Y] to copy to clipboard.)
+        (In gvim it is [Shift] ['][=]  then  [Y] to copy to clipboard.)
       Use mouse to highlight or place caret in text.
         (Not implemented: Keyboard keys to highlight or move caret.)
       [Q] or [ESC] to close
-
-    Thanks to: -
-    https://emersion.fr/blog/2020/wayland-clipboard-drag-and-drop/
-
     *needs*  xdg-shell-protocol.cpp       | see wl_examplesREADME.txt
              xdg-shell-client-protocol.h  |
 
     g++ -I/usr/include/freetype2 xdg-shell-protocol.cpp leon500.cpp -o leon -lwayland-client -lwayland-cursor -lfreetype
-                                                       [251130] */
+       Optionally, run with debug > >$ WAYLAND_DEBUG=1 ./leon
+       or - - - - -   prefix with the following for debug   - - - - -
+    g++ -fsanitize=address -fno-omit-frame-pointer -g -O1 . . . 
+    g++ -fsanitize=thread -g -O1 . . .
+                                                      [251130] */
 
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -30,6 +30,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <atomic>
+#include <mutex>
 #include "xdg-shell-client-protocol.h"
 using namespace std;
 
@@ -58,54 +60,53 @@ wl_data_source *datsrc;
 wl_data_offer *dta_offr, *hst_offr;
 FT_Library lbrry;
 FT_Face face;
-int txthght, mX, mY;
 unsigned pntr_serial, kbrd_serial;
 unsigned *p; // pixel array for window
 vector<unsigned char> clp = {0};
 vector<unsigned char> doc = {0};
 vector<unsigned> ls = {0}; // ls[]  each lines start pos within doc[]
 vector<unsigned short> ll = {0}; //  ll[]   pixel length of each line
-int doclength, caret, nlines, clp_size, clp_fd, enddoc;
-int txtX, txtY, txtW, txtH, tabW, lineH, ln_o;
+int txtH, mX, mY, lftM, topM;
+int doclength, caret, nlines, clp_size, enddoc;
+int tbX, tbY, tbW, tbH, tabW, lineH, ln_o;
 int caretx, carety, histcaret, histcaretx, histcarety;
-int hrdwrX, hrdwrY, surfwidth, surfheight, bffwdth, bffhght;
+int monW, monH, surfW, surfH, bufW, bufH;
+atomic <bool> evloop = true, redraw = true, blinkeractive;
 bool loopkeep, paintflag, txtbxfocus, cursorcaret, txtbxactive;
-bool blinker, blinkeractive, mousedown, highlight, select_own;
-bool xit, redraw = true, clpbrd, lftctl;
+bool blinker, mousedown, highlight, select_own, clpbrd, lftctl;
+unsigned char gct[256];  // gamma correction table
 
 
-void draw_rectangle(unsigned *m, int bW, int bH, int X, int Y,
-        int width, int height, unsigned fg) {
-  if (X < 0 || X > bW - width
-            || Y < 0 || Y > bH - height) return;
+void draw_rectangle(int X, int Y, int width, int height, unsigned fg) {
+  if (X < 0 || X > bufW - width
+            || Y < 0 || Y > bufH - height) return;
   int g, h, j, i, k;
-  k = Y * bW + X; h = (Y + height - 1) * bW + X;
+  k = Y * bufW + X; h = (Y + height - 1) * bufW + X;
   for (i = 0; i < width; i++) {
-    m[k] = fg; m[h] = fg;
+    p[k] = fg; p[h] = fg;
     k += 1; h += 1;
   }
-  g = height - 2; k = (Y + 1) * bW + X;
-  h = (Y + 1) * bW + X + width - 1;
+  g = height - 2; k = (Y + 1) * bufW + X;
+  h = (Y + 1) * bufW + X + width - 1;
   for (i = 0; i < g; i++) {
-    m[k] = fg; m[h] = fg;
-    k += bW; h += bW;
+    p[k] = fg; p[h] = fg;
+    k += bufW; h += bufW;
   }
 }
 
-void fill_rectangle(unsigned *m, int bW, int bH, int X, int Y,
-        int width, int height, unsigned fg) {
-  if (X < 0 || X > bW - width
-            || Y < 0 || Y > bH - height) return;
+void fill_rectangle(int X, int Y, int width, int height, unsigned fg) {
+  if (X < 0 || X > bufW - width
+            || Y < 0 || Y > bufH - height) return;
   int h, i, j, k;
   if ((fg & 0xff000000) == 0xff000000) {
-    h = Y * bW + X;
+    h = Y * bufW + X;
     j = Y + height; k = X + width;
     for (Y; Y < j; Y++) {
       for (i = X; i < k; i++) {
-       m[h] = fg;
+       p[h] = fg;
        h++;
       }
-    h += bW - width;
+    h += bufW - width;
     }
   }
   else {
@@ -113,15 +114,14 @@ void fill_rectangle(unsigned *m, int bW, int bH, int X, int Y,
   }
 }
 
-void draw_glyph(unsigned *m, int bW, int bH, int X, int Y,
-        unsigned fg, unsigned bg, unsigned char* gc) {
-  if (Y < 0 || Y > bH - face->glyph->bitmap.rows
-          || X < 0 || X > bW - face->glyph->bitmap.width) return;
+void draw_glyph(int X, int Y, unsigned fg, unsigned bg) {
+  if (Y < 0 || Y > bufH - face->glyph->bitmap.rows
+          || X < 0 || X > bufW - face->glyph->bitmap.width) return;
   if(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL)) return;
   unsigned char fR, fG, fB, bR, bG, bB;
   unsigned char *b = &face->glyph->bitmap.buffer[0];
   unsigned d;
-  int i, j, k = 0, l, o;
+  int i, j, k = 0, n, o;
   double r;
   fR = ((fg & 0xff0000) >> 16); fG = ((fg & 0xff00) >> 8);
   fB = (fg & 0xff); bR = ((bg & 0xff0000) >> 16);
@@ -129,49 +129,36 @@ void draw_glyph(unsigned *m, int bW, int bH, int X, int Y,
   j = Y + face->glyph->bitmap.rows;
   i = X + face->glyph->bitmap.width;
   for (Y; Y < j; Y++) {
-    for (l = X; l < i; l++) {
+    for (n = X; n < i; n++) {
       if (b[k] == 0) {}
       else if (b[k] == 255) {
-        m[Y * bW + l] = fg;
+        p[Y * bufW + n] = fg;
       }
       else {
         d = 0xff000000;
-        r = gc[b[k]] / 255.0;
+        r = gct[b[k]] / 255.0;
         o = r * fR + (1 - r) * bR + 0.5;
         d += o << 16;
         o = r * fG + (1 - r) * bG + 0.5;
         d += o << 8;
         o = r * fB + (1 - r) * bB + 0.5;
         d += o;
-        m[Y * bW + l] = d;
+        p[Y * bufW + n] = d;
       }
       k++;
     }
   }
 }
 
-void text_run(unsigned *m, int bW, int bH, int X, int Y,
-        unsigned char *str, int length, unsigned fg, unsigned bg) {
-  int pos = 0, num, i, j = 0;
+void text_run(int X, int Y, unsigned char *str, int length,
+        unsigned fg, unsigned bg) {
+  int pos = 0, num, i, j, k;
   unsigned u, gi;
-  double c, d;
-  unsigned char gc[256];  // gamma correction table
-  if (X > bW - txthght * 0.8 + 0.5 || X < 0
-          || Y > bH - txthght * 0.3 + 0.5 || Y < txthght * 0.8 + 0.5)
-          return;
-                    //Section: make table
-  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
-                        23, 27, 32, 39}; //curve
-  d = 255.5;
-  for (i = 255; i > -1; i--) {
-    gc[i] = d;
-    if (i % 16 == 15) {
-       c = cv[j] / 16.0;
-       j++;
-    }
-    d -= c;
-  }
-                    //Section: start run
+  i = txtH * face->ascender / 1152 + 1;
+  j = txtH * face->descender / -1152 + 1;
+  k = txtH * 0.63;
+  if (X > bufW - k || X < 0 || Y > bufH - j || Y < i) return;
+                //Section: start run
   while (pos < length) {
     if (str[pos] < 128) {
       num = 1;
@@ -196,14 +183,14 @@ void text_run(unsigned *m, int bW, int bH, int X, int Y,
     }
     if (u == 0) break;
     else if (u == 10) {
-      X = txtX; Y += txthght + 5;
-      if (Y > bH - 10) break;
+      X = tbX; Y += txtH + 5;
+      if (Y > bufH - 10) break;
     }
     else if(u == 9) {
-      X += tabW - X % tabW;
-      if (X > bW - txthght * 0.8 + 0.5) {
-        X = txtX; Y += txthght + 5;
-        if (Y > bH - 10) break;
+      X += tabW - (X - lftM) % tabW;
+      if (X > bufW - txtH * 0.8 + 0.5) {
+        X = tbX; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     else if (u < 32 || (u > 127 && u < 161)) {
@@ -213,13 +200,13 @@ void text_run(unsigned *m, int bW, int bH, int X, int Y,
       gi = FT_Get_Char_Index(face, u);
       if (FT_Load_Glyph(face, gi, 0)) break;
       if (face->glyph->bitmap.width != 0) {
-        draw_glyph(&m[0], bW, bH, face->glyph->bitmap_left + X,
-                Y - face->glyph->bitmap_top, fg, bg, &gc[0]);
+        draw_glyph(face->glyph->bitmap_left + X,
+                Y - face->glyph->bitmap_top, fg, bg);
       }
       X += face->glyph->advance.x >> 6;
-      if (X > bW - txthght * 0.8 + 0.5) {
-        X = txtX; Y += txthght + 5;
-        if (Y > bH - 10) break;
+      if (X > bufW - txtH * 0.8 + 0.5) {
+        X = tbX; Y += txtH + 5;
+        if (Y > bufH - 10) break;
       }
     }
     pos += num;
@@ -232,6 +219,7 @@ void set_cursor() {
   wl_pointer_set_cursor(pntr, pntr_serial, crsr_surf,
           crsr_img->hotspot_x, crsr_img->hotspot_y);
   wl_surface_attach(crsr_surf, crsr_buff, 0, 0);
+  wl_surface_damage(crsr_surf, 0, 0, crsr_img->width, crsr_img->height);
   wl_surface_commit(crsr_surf);
 }
 
@@ -240,79 +228,74 @@ void draw_textbox(bool refresh) {
   int i, j, k;
   unsigned fg = 0xffaaaa66, bg;
   if (txtbxfocus || txtbxactive) bg = 0xff171739; else bg = 0xff09092a;
-  fill_rectangle(p, bffwdth, bffhght, txtX + 1, txtY + 1,
-          txtW - 2, txtH - 2, bg);
+  fill_rectangle(tbX + 1, tbY + 1, tbW - 2, tbH - 2, bg);
   if (doclength > 0) {
-    j = ln_o + txtY;
+    j = topM + ln_o;
     for (i = 0; i < nlines; i++) {
       if (i == 12) break;
       if (!highlight || ls[i + 1] <= histcaret || ls[i] >= caret) {
         k = ls[i + 1] - ls[i];
         if (doc[ls[i + 1] - 1] == 10) k--;
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, fg, bg);
+        text_run(lftM, j, &doc[ls[i]], k, fg, bg);
       }
       else if (histcaret <= ls[i] && caret >= ls[i + 1]) {
-        fill_rectangle(p, bffwdth, bffhght, tabW, j - ln_o,
-                ll[i], lineH, fg);
+        fill_rectangle(lftM, j - ln_o, ll[i], lineH, fg);
         k = ls[i + 1] - ls[i];
         if (doc[ls[i + 1] - 1] == 10) k--;
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, bg, fg);
+        text_run(lftM, j, &doc[ls[i]], k, bg, fg);
       }
       else if (histcaret <= ls[i] && caret < ls[i + 1]) {
-        fill_rectangle(p, bffwdth, bffhght, tabW, j - ln_o,
-                caretx - tabW, lineH, fg);
+        fill_rectangle(lftM, j - ln_o, caretx - lftM, lineH, fg);
         k = caret - ls[i];
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, bg, fg);
+        text_run(lftM, j, &doc[ls[i]], k, bg, fg);
         k = ls[i + 1] - caret;
         if (doc[ls[i + 1] - 1] == 10) k--;
-        text_run(p, bffwdth, bffhght, caretx, j, &doc[caret],
-                k, fg, bg);      }
+        text_run(caretx, j, &doc[caret], k, fg, bg);
+      }
       else if (histcaret > ls[i] && caret >= ls[i + 1]) {
         k = histcaret - ls[i];
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, fg, bg);
-        fill_rectangle(p, bffwdth, bffhght, histcaretx, histcarety,
-                ll[i] + tabW - histcaretx, lineH, fg);
+        text_run(lftM, j, &doc[ls[i]], k, fg, bg);
+        fill_rectangle(histcaretx, histcarety,
+                ll[i] + lftM - histcaretx, lineH, fg);
         k = ls[i + 1] - histcaret;
         if (doc[ls[i + 1] - 1] == 10) k--;
-        text_run(p, bffwdth, bffhght, histcaretx, j, &doc[histcaret],
+        text_run(histcaretx, j, &doc[histcaret],
                 k, bg, fg);
       }
       else {
         k = histcaret - ls[i];
-        text_run(p, bffwdth, bffhght, tabW, j, &doc[ls[i]], k, fg, bg);
-        fill_rectangle(p, bffwdth, bffhght, histcaretx, histcarety,
+        text_run(lftM, j, &doc[ls[i]], k, fg, bg);
+        fill_rectangle(histcaretx, histcarety,
                 caretx - histcaretx, lineH, fg);
         k = caret - histcaret;
-        text_run(p, bffwdth, bffhght, histcaretx, j, &doc[histcaret], k,
-                bg, fg);
+        text_run(histcaretx, j, &doc[histcaret], k, bg, fg);
         k = ls[i + 1] - caret;
         if (doc[ls[i + 1] - 1] == 10) k--;
-        text_run(p, bffwdth, bffhght, caretx, j, &doc[caret],
-                k, fg, bg);
+        text_run(caretx, j, &doc[caret], k, fg, bg);
       }
       j += lineH;
     }
   }
   if (refresh) {
     wl_surface_attach(surf, buff, 0, 0);
-    wl_surface_damage(surf, txtX + 1, txtY + 1, txtW - 2, txtH - 2);
+    wl_surface_damage(surf, tbX + 1, tbY + 1, tbW - 2, tbH - 2);
     wl_surface_commit(surf); 
   }
 }
 
 void castlines() {
+  int pos = 0, num, tally = 0, space, spcpos, histpos = 0;
+  unsigned u, gi;
   if (nlines != 0) {
     ls.erase(ls.begin(), ls.begin() + nlines);
     ll.erase(ll.begin(), ll.begin() + nlines);
     nlines = 0;
   }
-  int pos = 0, num, tally = 0, space, spcpos, histpos = 0;
-  unsigned u, gi;
   ls[0] = doclength;
   while (pos < doclength) {
     if (pos == caret) {
-      caretx = tally + tabW;
-      carety = nlines * lineH + txtY;
+      caretx = tally + lftM;
+      carety = topM + nlines * lineH;
     }
     if (doc[pos] < 128) {
       num = 1;
@@ -361,7 +344,7 @@ void castlines() {
         spcpos = pos;
       }
     }
-    if (tally > 27 * txthght) {
+    if (tally > 27 * txtH) {
       ls.insert(ls.begin() + nlines, histpos);
       if (space == 0) {
         ll.insert(ll.begin() + nlines, tally);
@@ -377,8 +360,8 @@ void castlines() {
     }
     else if (pos == doclength - num) {
       if (caret == doclength) {
-        caretx = tally + tabW;
-        carety = nlines * lineH + txtY;
+        caretx = tally + lftM;
+        carety = topM + nlines * lineH;
       }
       ls.insert(ls.begin() + nlines, histpos);
       ll.insert(ll.begin() + nlines, tally);
@@ -387,34 +370,36 @@ void castlines() {
     pos += num;
   }
   //printf("number of lines = %d\n", nlines);
-  if (nlines > 12) enddoc = txtY + txtH;
-  else enddoc = txtY + nlines * lineH;
   if (nlines > 12) {
-    caret = ls[12];
-    carety = txtY + 11 * lineH;
-    caretx = ll[11] + tabW;
+    if (caret > ls[12]) {
+      caret = ls[12];
+      carety = topM + 11 * lineH;
+      caretx = lftM + ll[11];
+    }
+    enddoc = topM + 12 * lineH;
   }
-  if (redraw) draw_textbox(true);
+  else enddoc = topM + nlines * lineH;
+  draw_textbox(true);
 }
 
 void findcrsrpos() {
-  int pos, num, tally = tabW;
+  int pos, num, tally = lftM;
   unsigned u, gi;
-  if (mY > txtY + nlines * lineH) {
+  if (mY > topM + nlines * lineH) {
     caret = doclength;
-    caretx = ll[nlines - 1] + tabW;
-    carety = (nlines - 1) * lineH + txtY;
+    caretx = ll[nlines - 1] + lftM;
+    carety = topM + (nlines - 1) * lineH;
   }
   else {
-    int j = (mY - txtY) / lineH;
-    carety = j * lineH + txtY;
-    if (mX - tabW > ll[j]) {
+    int j = (mY - topM) / lineH;
+    carety = topM + j * lineH;
+    if (mX - lftM > ll[j]) {
       caret = ls[j + 1];
-      caretx = ll[j] + tabW;
+      caretx = ll[j] + lftM;
     }
-    else if (mX < tabW) {
+    else if (mX < lftM) {
       caret = ls[j];
-      caretx = tabW;
+      caretx = lftM;
     }
     else {
       pos = ls[j];
@@ -441,7 +426,7 @@ void findcrsrpos() {
         else {
           pos++; continue;
         }
-        if (doc[pos] == 9) tally += tabW - tally % tabW;
+        if (doc[pos] == 9) tally += tabW - (tally - lftM) % tabW;
         else if (u < 32 || (u > 127 && u < 161)) {
           pos += num; continue;
         }
@@ -462,23 +447,21 @@ void caretblinker() {
   blinker = true;
   int i = 0, j, k, x, y;
   unsigned h[lineH];
-  this_thread::sleep_for(chrono::milliseconds(23));
   while (blinkeractive) {
     if (i % 20 == 0 && redraw) {
       redraw = false;
+      x = caretx; y = carety; j = y * bufW + x;
       if (blinker) {
-        x = caretx; y = carety; j = y * bffwdth + x;
         for (k = 0; k < lineH; k++) {
           h[k] = p[j];
           p[j] = 0xffaaaa66;
-          j += bffwdth;	  
+          j += bufW;
         }
       }
       else {
-        j = y * bffwdth + x;
         for (k = 0; k < lineH; k++) {
           p[j] = h[k];
-          j += bffwdth;	  
+          j += bufW; 
         }
       }
       wl_surface_attach(surf, buff, 0, 0);
@@ -490,16 +473,16 @@ void caretblinker() {
     this_thread::sleep_for(chrono::milliseconds(23));
     i++;
   }
-  if (redraw) draw_textbox(true);
+  if (evloop && redraw) draw_textbox(true);
 }
 
 void top_config(void *data, xdg_toplevel *xdgtop, int width,
         int height, wl_array *states) {
-  surfwidth = width; surfheight = height;
+  surfW = width; surfH = height;
 }
 
 void top_close(void *data, xdg_toplevel *xdgtop) {
-  xit = true;
+  blinkeractive = false; evloop = false;
 }
 
 //void top_config_bounds(void *data, xdg_toplevel *xdgtop,
@@ -519,15 +502,17 @@ xdg_toplevel_listener top_lstnr = {
 
 void data_o_offer(void *data, wl_data_offer *data_offer,
         const char *mime_type) {
-  printf("mime_type data offer = %s\n", mime_type);
+  //printf("mime_type data offer = %s\n", mime_type);
 }
 
 void data_o_source_actions(void *data, wl_data_offer *data_offer,
         unsigned source_actions) {
+  printf("source_actions data offer = %u\n", source_actions);
 }
 
 void data_o_action(void *data, wl_data_offer *data_offer,
         unsigned dnd_action) {
+  printf("dnd_action data offer = %u\n", dnd_action);
 }
 
 wl_data_offer_listener dat_offer_lstnr = {
@@ -535,11 +520,6 @@ wl_data_offer_listener dat_offer_lstnr = {
   .source_actions = data_o_source_actions,
   .action = data_o_action,
 };
-
-void send_to_pipe() {
-  write(clp_fd, &clp[0], clp_size);
-  close(clp_fd);
-}
 
 void dat_src_target(void *data, wl_data_source *data_source,
         const char *mime_type) {
@@ -550,14 +530,15 @@ void dat_src_send(void *data, wl_data_source *data_source,
         const char *mime_type, int32_t fd) {
   if (strcmp(mime_type, "UTF8_STRING") == 0) {
     printf("piping to clipboard\n");
-    clp_fd = fd;
-    thread t2(send_to_pipe); t2.detach();
+    write(fd, &clp[0], clp_size);
+    close(fd);
   } else printf("Requesting a different mime_type -- %s\n", mime_type);
 }
 
 void dat_src_cancelled(void *data, wl_data_source *data_source) {
   select_own = false;
   wl_data_source_destroy(datsrc);
+  datsrc = NULL;
   printf("someone else now owns the clipboard\n");
 }
 
@@ -568,6 +549,7 @@ wl_data_source_listener dat_src_lstnr = {
 };
 
 void receive_clpbrd() {
+  redraw = false;
   int i, j = 0, size = 4096;
   if (!select_own && (dta_offr != hst_offr)) {
                 //Section: Setting up the pipe
@@ -593,6 +575,7 @@ void receive_clpbrd() {
     clp_size = j;
   }
                 //Section: Inserting the clip
+  printf("inserting\n");
   doc.resize(doclength + clp_size + 1);
   for (i = doclength; i >= caret; i--) doc[i + clp_size] = doc[i];
   j = caret;
@@ -602,8 +585,9 @@ void receive_clpbrd() {
 }
 
 void send_to_clpbrd() {
+  redraw = false;
   if (select_own)
-    wl_data_device_set_selection(datdvc, NULL, kbrd_serial);
+          wl_data_device_set_selection(datdvc, NULL, kbrd_serial);
   wl_display_roundtrip(dis);
   int i, j, k;
   j = caret - histcaret; k = histcaret;
@@ -613,14 +597,15 @@ void send_to_clpbrd() {
   for (i = caret; i <= doclength; i++) doc[i - j] = doc[i];
   doclength -= j; caret -= j;
   doc.resize(doclength + 1);
+  if (doclength == 0) { txtbxactive = false; blinkeractive = false; }
   printf("notify of your data source offer\n");
+  if (datsrc) { wl_data_source_destroy(datsrc); datsrc = NULL; }
   datsrc = wl_data_device_manager_create_data_source(datadman);
   wl_data_source_add_listener(datsrc, &dat_src_lstnr, NULL);
   wl_data_source_offer(datsrc, "UTF8_STRING");
   wl_data_device_set_selection(datdvc, datsrc, kbrd_serial);
   select_own = true; highlight = false;
-  if (doclength == 0) blinkeractive = false;
-  else castlines();
+  castlines();
 }
 
 void datdev_data_offer(void *data, wl_data_device *data_device,
@@ -630,12 +615,15 @@ void datdev_data_offer(void *data, wl_data_device *data_device,
 
 void datdev_selection(void *data, wl_data_device *data_device,
         wl_data_offer *id) {
+  if (dta_offr) {
+    wl_data_offer_destroy(dta_offr);
+    dta_offr = NULL; hst_offr = NULL;
+  }
   if (id) {
     dta_offr = id;
     clpbrd = true;
     printf("clipboard active\n");
   } else {
-    dta_offr = NULL; hst_offr = NULL;
     clpbrd = false;
     printf("clipboard empty\n");
   }
@@ -668,10 +656,12 @@ void kybrd_key(void *data, wl_keyboard *kybrd, unsigned serial,
   }
   else {
     if (key == 29) lftctl = false;
-    else if (key == 16 || key == 1) xit = true;
-    else if (lftctl && key == 47 && clpbrd && txtbxfocus && !highlight)
-            receive_clpbrd();
-    else if (lftctl && key == 46 && highlight) send_to_clpbrd();
+    else if (key == 16 || key == 1) {
+            blinkeractive = false; evloop = false; }
+    else if (redraw && lftctl && key == 47 &&
+            clpbrd && txtbxfocus && !highlight) receive_clpbrd();
+    else if (redraw && lftctl && key == 46 && highlight)
+            send_to_clpbrd();
   }
 }
 
@@ -708,28 +698,28 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
         wl_fixed_t surf_x, wl_fixed_t surf_y) {
   mX = wl_fixed_to_int(surf_x); mY = wl_fixed_to_int(surf_y);
   int endline;
-                //Section: mouse over textbox
-  if (mX > txtX && mX < txtX + txtW && mY > txtY
-          && mY < txtY + txtH && !txtbxfocus) {
+                //Section: textbox focus
+  if (mX > tbX && mX < tbX + tbW && mY > tbY
+          && mY < tbY + tbH && !txtbxfocus) {
     txtbxfocus = true;
-    if (!txtbxactive && redraw) draw_textbox(true);
+    if (!txtbxactive && redraw) { draw_textbox(true); return; }
   }
-  else if ((mX < txtX || mX > txtX + txtW || mY < txtY
-                      || mY > txtY + txtH) && txtbxfocus) {
+  else if ((mX < tbX || mX > tbX + tbW || mY < tbY
+                      || mY > tbY + tbH) && txtbxfocus) {
     txtbxfocus = false;
-    if (!txtbxactive && redraw) draw_textbox(true);
+    if (!txtbxactive && redraw) { draw_textbox(true); return; }
   }
                 //section:  mouse over text
   if (doclength != 0) {
-    if (mY < txtY || mY > enddoc || nlines == 0) endline = tabW;
-    else endline = tabW + ll[(mY - txtY) / lineH];
-    if (mY > txtY && mY < enddoc && mX > tabW
+    if (mY < topM || mY > enddoc || nlines == 0) endline = lftM;
+    else endline = lftM + ll[(mY - topM) / lineH];
+    if (mY > topM && mY < enddoc && mX > lftM
                   && mX < endline && !cursorcaret) {
       cursorcaret = true;
       crsr = wl_cursor_theme_get_cursor(crsr_theme, "xterm");
       set_cursor();
     }
-    else if ((mY < txtY || mY > enddoc || mX < tabW
+    else if ((mY < topM || mY > enddoc || mX < lftM
                         || mX > endline) && cursorcaret) {
       cursorcaret = false;
       crsr = wl_cursor_theme_get_cursor(crsr_theme, "left_ptr");
@@ -737,30 +727,29 @@ void pntr_motion(void *data, wl_pointer *pntr, unsigned time,
     }
   }
                 //section: mouse drag to highlight text
-  if (mousedown && mY > txtY && mY < enddoc && redraw) {
+  if (mousedown && mY > topM && mY < enddoc && redraw) {
+    if (!redraw) return;
     findcrsrpos();
-    if (caret > histcaret) {
-      highlight = true;
-      if (redraw) draw_textbox(true);
-    }
+    if (caret > histcaret) highlight = true; else highlight = false;
+    if (redraw) draw_textbox(true);
   }
 }
 
 void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
         unsigned time, unsigned button, unsigned state) {
         // BTN_LEFT 272,  BTN_RIGHT 273,  BTN_MIDDLE 274
+  if (doclength == 0) return;
   if (state == 1) { //Section: Button Down
     if (button == 272) {
       highlight = false;
-      if (txtbxfocus) {
-        if (doclength != 0) {
-          findcrsrpos();
-          histcaret = caret;
-          histcaretx = caretx; histcarety = carety;
-          mousedown = true;
-          txtbxactive = true;
-          blinkeractive = false;
-        }
+      if (txtbxfocus && mY > topM && mY < enddoc && redraw) {
+        blinkeractive = false;
+        findcrsrpos();
+        histcaret = caret;
+        histcaretx = caretx; histcarety = carety;
+        mousedown = true;
+        txtbxactive = true;
+        this_thread::sleep_for(chrono::milliseconds(23));
       }
       else {
         txtbxactive = false;
@@ -772,6 +761,8 @@ void pntr_button(void *data, wl_pointer *pntr, unsigned serial,
   else {            //Section: Button Up
     if (button == 272 && txtbxactive) {
       mousedown = false;
+      if (caret > histcaret) highlight = true;
+      else highlight = false;
       blinkeractive = true;
       thread t1(caretblinker); t1.detach();
     }
@@ -829,22 +820,23 @@ wl_buffer_listener buff_listnr = {
 
 void draw_resize() {
   redraw = false;
-  bffwdth = surfwidth; bffhght = surfheight;
-  buff = wl_shm_pool_create_buffer(pool, 0, bffwdth, bffhght,
-          bffwdth * 4, WL_SHM_FORMAT_XRGB8888);
-  unsigned fg = 0xffaaaa66, bg = 0xff000022;
+  bufW = surfW; bufH = surfH;
+  if (buff) wl_buffer_destroy(buff); 
+  buff = wl_shm_pool_create_buffer(pool, 0, bufW, bufH,
+          bufW * 4, WL_SHM_FORMAT_XRGB8888);
   int i, j;
-  j = bffwdth * bffhght;
-  for (i = 0; i < j; i++) p[i] = bg;
-  draw_rectangle(p, bffwdth, bffhght, txtX, txtY, txtW, txtH, fg);
+  j = bufW * bufH;
+  for (i = 0; i < j; i++) p[i] = 0xff000022;
+  draw_rectangle(tbX, tbY, tbW, tbH, 0xffaaaa66);
   draw_textbox(false);
   wl_buffer_add_listener(buff, &buff_listnr, NULL);
   wl_surface_attach(surf, buff, 0, 0);
+  wl_surface_damage(surf, 0, 0, bufW, bufH);
   wl_surface_commit(surf);
 }
 
 void xdgsurf_cnfgr(void *data, xdg_surface *xdgsurf, unsigned serial) {
-  if (redraw && (surfwidth != bffwdth || surfheight != bffhght)) {
+  if (redraw && (surfW != bufW || surfH != bufH)) {
     thread t1(draw_resize); t1.detach();
     xdg_surface_ack_configure(xdgsurf, serial);
   }
@@ -870,7 +862,7 @@ void output_geometry(void* data, wl_output *wl_output,
 
 void output_mode(void *data, wl_output *wl_output,
         unsigned flags, int width, int height, int refresh) {
-  hrdwrX = width; hrdwrY = height;
+  monW = width; monH = height;
 }
 
 void output_done(void *data, wl_output *wl_output) {
@@ -950,7 +942,7 @@ int main() {
   xdgtop = xdg_surface_get_toplevel(xdgsurf);
   xdg_toplevel_add_listener(xdgtop, &top_lstnr, NULL);
   wl_display_roundtrip(dis);
-  xdg_toplevel_set_max_size(xdgtop, hrdwrX, hrdwrY);
+  xdg_toplevel_set_max_size(xdgtop, monW, monH);
   xdg_toplevel_set_min_size(xdgtop, 832, 468);
   xdg_toplevel_set_title(xdgtop,"Test GUI");
   wl_surface_commit(surf);
@@ -962,7 +954,7 @@ int main() {
   wl_data_device_add_listener(datdvc, &dat_dev_lstnr, NULL);
                 //Section: Prep Shared memory Buffer
   int fd = syscall(SYS_memfd_create, "shm-leon", 0);  //<sys/syscall.h>
-  int size = hrdwrX * hrdwrY * 4;                     //<unistd.h>
+  int size = monW * monH * 4;                     //<unistd.h>
   ftruncate(fd, size);
   p = (unsigned*) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
           fd, 0);                                     //<sys/mman.h>
@@ -976,45 +968,56 @@ int main() {
   if (FT_New_Face(lbrry, "/usr/share/fonts/gnu-free/FreeSerif.otf",
           0, &face)) {printf("font not loaded\n"); return 1;}
   //printf("number of glyphs in this font = %d\n", face->num_glyphs);
-  txthght = 28;
-  FT_Set_Pixel_Sizes(face, 0, txthght);
+  txtH = 28;
+  FT_Set_Pixel_Sizes(face, 0, txtH);
+                //Section: Make gamma correction table
+  int i, j = 0;
+  double c, d;
+  unsigned char cv[] = {5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20,
+                        23, 27, 32, 39}; //curve
+  d = 255.5;
+  for (i = 255; i > -1; i--) {
+    gct[i] = d;
+    if (i % 16 == 15) {
+       c = cv[j] / 16.0;
+       j++;
+    }
+    d -= c;
+  }
                 //Section: Show window
-  surfwidth = 864; surfheight = 486;
-  txtX = txthght * 2; txtY = txthght * 2;
-  txtW = txthght * 29; txtH = txthght * 15.3 + 0.5; 
-  tabW = 3 * txthght; lineH = 1.25 * txthght + 0.5;
-  ln_o = 0.85 * txthght + 0.5;
+  surfW = 864; surfH = 486;
+  FT_Load_Glyph(face, FT_Get_Char_Index(face, 48), 0);
+  tabW = 8 * face->glyph->advance.x >> 6;
+  tbX = txtH; tbY = txtH;
+  tbW = txtH * 29; tbH = txtH * 16.5 + 0.5; 
+  lftM = 2 * txtH; topM = txtH * 1.6 + 0.5;
+  lineH = 1.25 * txtH + 0.5; ln_o = 0.85 * txtH + 0.5;
   draw_resize();
   while (wl_display_dispatch(dis) != -1) {
-    if (xit) break;
+    if (!evloop) break;
   }
-  wl_shm_pool_destroy(pool);
+  this_thread::sleep_for(chrono::milliseconds(30));
+  if (hst_offr) wl_data_offer_destroy(hst_offr);
+  if (datsrc) wl_data_source_destroy(datsrc);
+  if (datdvc) wl_data_device_destroy(datdvc);
+  if (kybrd) wl_keyboard_destroy(kybrd);
+  if (pntr) wl_pointer_destroy(pntr);
+  if (seat) wl_seat_destroy(seat);
+  if (crsr_theme) wl_cursor_theme_destroy(crsr_theme);
+  if (crsr_surf) wl_surface_destroy(crsr_surf);
+  if (xdgtop) xdg_toplevel_destroy(xdgtop);
+  if (xdgsurf) xdg_surface_destroy(xdgsurf);
+  if (surf) wl_surface_destroy(surf);
+  if (buff) wl_buffer_destroy(buff);
+  if (xdgwmb) xdg_wm_base_destroy(xdgwmb);
+  if (shm) wl_shm_destroy(shm);
+  if (comp) wl_compositor_destroy(comp);
+  if (out) wl_output_destroy(out);
+  if (reg) wl_registry_destroy(reg);
+  if (pool) wl_shm_pool_destroy(pool);
+  if (p) munmap(p, size);
+  if (face) FT_Done_Face(face);
+  if (lbrry) FT_Done_FreeType(lbrry);
   wl_display_disconnect(dis);
 }
 
-//  grayscale = R * 0.3 + G * 0.59 + B * 0.11
- 
-  //printf("size of keymap in bytes  =  %u\n", size);
-  //char *map_shm = (char*) mmap(NULL, size, PROT_READ,
-  //        MAP_PRIVATE, fd, 0);
-  //close(fd);
- 
-//  i = strlen(reinterpret_cast<const char*>(doc));
-//  printf("length = %d\n", i);
-/*  unsigned gi = FT_Get_Char_Index(face, 0x30); //arrow 0x2190 D 0x44
-          //j 0x6a
-  printf("glyph index =  %u         ", gi);
-  printf("glyph index =  0x%x\n", gi);
-  if (FT_Load_Glyph(face, gi, 0)) printf("failed to load \n");
-  else printf("glyph loaded!\n");
-  printf("advance  = %d\n", face->glyph->advance.x >> 6);
-  printf("width  = %d\n", face->glyph->bitmap.width);
-  printf("rows  = %d\n", face->glyph->bitmap.rows);
-  printf("left  = %d\n", face->glyph->bitmap_left);
-  printf("top  = -%d\n", face->glyph->bitmap_top);
-  if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL))
-          printf("failed to render\n");
-  else printf("glyph now rendered!\n");
-  unsigned char *b = &face->glyph->bitmap.buffer[0];
-  printf("byte n  = %d\n", b[0]);  */
-//  printf("doc[49] =  %d\n", doc[49]);
